@@ -1,0 +1,17 @@
+# IDE
+.idea
+*.iml
+*.ipr
+*.iws
+
+# Gradle caches
+.gradle
+build
+**/build
+
+# Frontend (not needed in backend image)
+frontend
+
+# OS junk
+.DS_Store
+Thumbs.db
