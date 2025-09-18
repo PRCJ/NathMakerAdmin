@@ -51,9 +51,9 @@ jobs:
               azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
               repo_token: ${{ secrets.GITHUB_TOKEN }}
               action: "upload"
-              app_location: "" # point directly to the built folder
+              app_location: "frontend" # point directly to the built folder
               api_location: "" # no backend API
-              output_location: "frontend/build/distributions" # leave blank since app_location IS the final folder
+              output_location: "build/distributions" # leave blank since app_location IS the final folder
               skip_app_build: true # don’t rebuild
 
   close_pull_request_job:
@@ -67,6 +67,7 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           action: "close"
+
 
 
 
