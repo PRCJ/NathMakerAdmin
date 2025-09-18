@@ -29,9 +29,14 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
       
+      # Update package lock file if needed
+      - name: Update Kotlin package lock
+        run: ./gradlew kotlinUpgradePackageLock --no-daemon
+        continue-on-error: true
+      
       # Build the project first
       - name: Build project
-        run: ./gradlew :frontend:build
+        run: ./gradlew :frontend:build --no-daemon
       
       # Verify build output exists
       - name: Check build output
