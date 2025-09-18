@@ -4,6 +4,13 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+# Allow frontend build output for deployment
+!frontend/build/
+frontend/build/*
+!frontend/build/distributions/
+!frontend/build/distributions/**
+!frontend/build/distributions/index.html
+
 ### IntelliJ IDEA ###
 .idea/modules.xml
 .idea/jarRepositories.xml
