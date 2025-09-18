@@ -42,7 +42,7 @@ jobs:
 
       # Debug: list folders and check files
       - name: Debug workspace root
-        run: ls -la /github/workspace
+        run: ls -la .
 
       - name: Debug frontend folder
         run: ls -la frontend
@@ -80,3 +80,4 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           action: "close"
+
