@@ -31,6 +31,14 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      - name: Copy static index.html
+        run: cp frontend/index.html frontend/build/distributions/index.html
+  
+
+      - name: Confirm index.html exists
+        run: find frontend/build/distributions -iname "index.html"
+  
+
       # Update package lock file if needed
       - name: Update Kotlin package lock
         run: ./gradlew kotlinUpgradePackageLock --no-daemon
@@ -38,7 +46,7 @@ jobs:
 
       # Build the project first
       - name: Build project
-        run: ./gradlew :frontend:build --no-daemon
+        run: ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
 
       # Debug: list folders and check files
       - name: Debug workspace root
@@ -80,4 +88,9 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           action: "close"
+
+
+
+
+
 
