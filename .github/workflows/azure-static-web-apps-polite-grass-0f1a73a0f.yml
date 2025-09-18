@@ -31,6 +31,10 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      - name: Confirm index.html exists
+        run: find frontend/build/distributions -iname "index.html"
+  
+
       # Update package lock file if needed
       - name: Update Kotlin package lock
         run: ./gradlew kotlinUpgradePackageLock --no-daemon
@@ -80,6 +84,7 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           action: "close"
+
 
 
 
