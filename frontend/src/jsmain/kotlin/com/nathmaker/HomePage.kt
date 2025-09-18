@@ -16,7 +16,7 @@ private val scope = MainScope()
 
 @JsName("btoa")
 external fun btoa(input: String): String
-
+// test comment
 @Composable
 fun HomePage(username: String, password: String) {
     var catalogues by remember { mutableStateOf<List<Catalogue>>(emptyList()) }
