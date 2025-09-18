@@ -38,7 +38,7 @@ jobs:
 
       # Build the project first
       - name: Build project
-        run: ./gradlew :frontend:build --no-daemon
+        run: ./gradlew :frontend:browserDistribution --no-daemon
 
       # Debug: list folders and check files
       - name: Debug workspace root
@@ -80,4 +80,5 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           action: "close"
+
 
