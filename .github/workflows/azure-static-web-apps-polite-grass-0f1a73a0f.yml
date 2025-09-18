@@ -31,6 +31,10 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      - name: Copy static index.html
+        run: cp frontend/index.html frontend/build/distributions/index.html
+  
+
       - name: Confirm index.html exists
         run: find frontend/build/distributions -iname "index.html"
   
@@ -84,6 +88,7 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           action: "close"
+
 
 
 
