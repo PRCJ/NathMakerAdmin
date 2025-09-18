@@ -40,7 +40,9 @@ jobs:
       
       # Verify build output exists
       - name: Check build output
-        run: ls -la frontend/build/distributions/
+        run: |
+          ls -la frontend/build/distributions/
+          find frontend/build/distributions/ -name "*.html" -type f
       
       - name: Build And Deploy
         id: builddeploy
@@ -49,10 +51,10 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "frontend/build/distributions" # Pre-built app location
-          api_location: "" # No API
-          output_location: "" # Already built, no additional output needed
-          skip_app_build: true # Skip Azure's build since we built manually
+          app_location: "frontend" # Frontend source location
+          api_location: "" # No API (backend is separate)
+          output_location: "build/distributions" # Relative to frontend directory
+          skip_app_build: true # We already built it
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
