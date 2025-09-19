@@ -1,5 +1,6 @@
 package com.nathmakers.admin.backend.model
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 
 @Entity
@@ -14,5 +15,6 @@ data class Item(
 
     @ManyToOne
     @JoinColumn(name = "catalogue_id")
+    @JsonIgnore  // 👈 ADD THIS LINE
     var catalogue: Catalogue? = null
 )
