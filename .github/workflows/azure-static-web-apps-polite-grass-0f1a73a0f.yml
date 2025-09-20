@@ -73,16 +73,24 @@ jobs:
           echo "=== Complete file listing in deploy folder ==="
           find ./deploy -type f -exec ls -la {} \;
           
-          echo "=== Searching for any HTML files ==="
+          echo "=== Looking for HTML files in subdirectories ==="
           find ./deploy -name "*.html" -type f -exec ls -la {} \;
           
-          echo "=== Looking for index.html specifically ==="
+          echo "=== Flattening directory structure if needed ==="
+          if [ -d "./deploy/composeResources" ]; then
+            echo "Found composeResources directory, moving files to root"
+            mv ./deploy/composeResources/* ./deploy/ 2>/dev/null || true
+            rmdir ./deploy/composeResources 2>/dev/null || true
+          fi
+          
+          echo "=== Final check for index.html ==="
           if [ -f "./deploy/index.html" ]; then
             echo "SUCCESS: index.html found!"
             ls -la ./deploy/index.html
             head -5 ./deploy/index.html
           else
-            echo "ERROR: index.html not found, checking what we have:"
+            echo "ERROR: index.html still not found after flattening"
+            echo "Final directory contents:"
             ls -la ./deploy/
           fi
 
