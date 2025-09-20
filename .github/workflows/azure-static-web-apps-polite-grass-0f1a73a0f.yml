@@ -20,102 +20,202 @@ jobs:
           submodules: true
           lfs: false
 
-      # Add Java setup for Kotlin/Gradle build
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      # Make gradlew executable
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      # Update package lock file if needed
       - name: Update Kotlin package lock
         run: ./gradlew kotlinUpgradePackageLock --no-daemon
         continue-on-error: true
 
-      # Build the project first
       - name: Build project
         run: ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
 
-      # Debug: Verify build output exists
-      - name: Debug distributions folder (recursive)
-        run: ls -R frontend/build/distributions
-
-      - name: Find index.html
-        run: find frontend/build/distributions -iname "index.html" || echo "index.html not found!"
-
-      # Verify deployment files before Azure deployment
-      - name: Verify deployment files
+      - name: Analyze Kotlin/JS build output
         run: |
-          echo "=== Checking frontend/build/distributions ==="
-          ls -la frontend/build/distributions/
-          echo "=== Content of index.html (first 10 lines) ==="
-          head -n 10 frontend/build/distributions/index.html || echo "No index.html found"
-          echo "=== File count in distributions ==="
-          find frontend/build/distributions -type f | wc -l
-
-      # ✅ Fixed: Copy built files + move JS to root
-      - name: Copy built files to deployment location
-        run: |
-          echo "=== Creating deploy directory ==="
-          rm -rf ./deploy
-          mkdir -p ./deploy
-
-          echo "=== Copying files using rsync ==="
-          rsync -av frontend/build/distributions/ ./deploy/
-
-          echo "=== Flattening directory structure if needed ==="
-          if [ -d "./deploy/composeResources" ]; then
-            cp -r ./deploy/composeResources/* ./deploy/ 2>/dev/null || true
-          fi
-          if [ -d "./deploy/mathmakeradmin.frontend.generated.resources" ]; then
-            echo "Moving generated resources to root..."
-            cp -r ./deploy/mathmakeradmin.frontend.generated.resources/* ./deploy/ 2>/dev/null || true
-          fi
-
-          echo "=== Looking for JavaScript files in root ==="
-          js_files=$(find ./deploy -maxdepth 1 -type f -name "*.js" | grep -v ".map")
-          if [ -n "$js_files" ]; then
-            main_js=$(echo "$js_files" | grep "main" | head -1)
-            if [ -n "$main_js" ]; then
-              js_filename=$(basename "$main_js")
-            else
-              js_filename=$(basename $(echo "$js_files" | head -1))
-            fi
-            echo "Using JS file: $js_filename"
+          echo "=== Kotlin/JS Build Analysis ==="
+          echo "Build directory structure:"
+          find frontend/build -type f -name "*.js" | grep -v node_modules | sort || echo "No JS files found"
+          
+          echo ""
+          echo "Distribution directory contents:"
+          if [ -d "frontend/build/distributions" ]; then
+            ls -la frontend/build/distributions/
+            echo ""
+            echo "All files in distributions:"
+            find frontend/build/distributions -type f -exec ls -la {} \;
           else
-            echo "No JS files found, fallback to app.js"
-            js_filename="app.js"
+            echo "No distributions directory found"
           fi
+          
+          echo ""
+          echo "Looking for webpack bundle files:"
+          find frontend/build -name "*.js" -type f | grep -E "(main|app|frontend|bundle)" || echo "No typical bundle files found"
+          
+          echo ""
+          echo "All non-map JS files in build:"
+          find frontend/build -name "*.js" -type f | grep -v "\.map$" | head -10 || echo "No JS files found"
 
-          echo "=== Creating index.html file ==="
-          cat > ./deploy/index.html <<EOF
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>NathMaker Admin</title>
-          </head>
-          <body>
-              <div id="root"></div>
-              <script src="./$js_filename"></script>
-          </body>
-          </html>
-          EOF
+      - name: Prepare Kotlin/JS deployment
+        run: |
+          echo "=== Kotlin/JS Deployment Preparation ==="
+          
+          # Create deploy directory
+          rm -rf ./deploy || true
+          mkdir -p ./deploy
+          
+          # Copy all files from distributions
+          if [ -d "frontend/build/distributions" ]; then
+            echo "Copying all distribution files..."
+            cp -r frontend/build/distributions/* ./deploy/ 2>/dev/null || echo "Copy failed"
+            
+            echo "Files after copy:"
+            ls -la ./deploy/ || echo "Cannot list deploy"
+          fi
+          
+          # Handle composeResources if present
+          if [ -d "./deploy/composeResources" ]; then
+            echo "Handling composeResources..."
+            find ./deploy/composeResources -name "*.js" -type f -exec cp {} ./deploy/ \; || true
+            find ./deploy/composeResources -name "*.css" -type f -exec cp {} ./deploy/ \; || true
+            find ./deploy/composeResources -name "*.html" -type f -exec cp {} ./deploy/ \; || true
+          fi
+          
+          echo "=== Finding the Main Kotlin/JS Bundle ==="
+          
+          # Strategy 1: Look for the largest JS file (likely the main bundle)
+          main_bundle=""
+          if [ -d "./deploy" ]; then
+            # Find the largest non-map JS file
+            largest_js=$(find ./deploy -name "*.js" -type f | grep -v "\.map$" | xargs ls -la 2>/dev/null | sort -k5 -nr | head -1 | awk '{print $NF}' || echo "")
+            
+            if [ -n "$largest_js" ] && [ -f "$largest_js" ]; then
+              main_bundle=$(basename "$largest_js")
+              echo "✅ Found largest JS bundle: $main_bundle ($(stat -c%s "$largest_js" 2>/dev/null || echo 'unknown') bytes)"
+            fi
+          fi
+          
+          # Strategy 2: Look for common Kotlin/JS bundle names
+          if [ -z "$main_bundle" ]; then
+            for name in "frontend.js" "main.js" "app.js" "bundle.js" "index.js"; do
+              if [ -f "./deploy/$name" ]; then
+                main_bundle="$name"
+                echo "✅ Found bundle by name: $main_bundle"
+                break
+              fi
+            done
+          fi
+          
+          # Strategy 3: Look in original build and copy the largest
+          if [ -z "$main_bundle" ] && [ -d "frontend/build" ]; then
+            echo "No bundle in deploy, checking original build..."
+            build_js=$(find frontend/build -name "*.js" -type f | grep -v "\.map$" | xargs ls -la 2>/dev/null | sort -k5 -nr | head -1 | awk '{print $NF}' || echo "")
+            
+            if [ -n "$build_js" ] && [ -f "$build_js" ]; then
+              main_bundle=$(basename "$build_js")
+              echo "✅ Copying largest JS from build: $build_js"
+              cp "$build_js" "./deploy/$main_bundle" || echo "Copy failed"
+            fi
+          fi
+          
+          # Final fallback
+          if [ -z "$main_bundle" ]; then
+            echo "⚠️  No JS bundle found - this will break your app!"
+            main_bundle="frontend.js"
+            echo "Using fallback name: $main_bundle"
+          fi
+          
+          echo "📦 Selected main bundle: $main_bundle"
+          
+          # Verify the bundle exists and check its size
+          if [ -f "./deploy/$main_bundle" ]; then
+            bundle_size=$(stat -c%s "./deploy/$main_bundle" 2>/dev/null || echo "0")
+            echo "✅ Bundle exists, size: $bundle_size bytes"
+            
+            if [ "$bundle_size" -lt 1000 ]; then
+              echo "⚠️  WARNING: Bundle is very small ($bundle_size bytes) - might not contain your app"
+            fi
+          else
+            echo "❌ ERROR: Selected bundle does not exist!"
+          fi
+          
+          # Look for existing index.html
+          if [ -f "./deploy/index.html" ]; then
+            echo "✅ Found existing index.html, updating script reference"
+            # Update existing index.html to reference our bundle
+            sed -i "s/src=\"[^\"]*\.js\"/src=\".\/$main_bundle\"/g" ./deploy/index.html || true
+          else
+            echo "📝 Creating index.html for Kotlin/JS app"
+            cat > ./deploy/index.html << HTML_END
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NathMaker Admin</title>
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #root { min-height: 100vh; }
+        .loading { 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            font-size: 18px; 
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div class="loading">Loading NathMaker Admin...</div>
+    </div>
+    
+    <script>
+        // Error handling for Kotlin/JS loading
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('JavaScript Error:', msg, 'at', url, ':', lineNo);
+            document.getElementById('root').innerHTML = 
+                '<div style="padding: 20px; color: red;">' +
+                '<h2>Application Error</h2>' +
+                '<p>Failed to load the application. Check console for details.</p>' +
+                '<p>Error: ' + msg + '</p>' +
+                '</div>';
+            return false;
+        };
+    </script>
+    
+    <!-- Load the main Kotlin/JS bundle -->
+    <script src="./$main_bundle"></script>
+</body>
+</html>
+HTML_END
+          fi
+          
+          echo "=== Final Verification ==="
+          echo "Deploy directory contents:"
+          ls -la ./deploy/ || echo "Cannot list deploy"
+          
+          echo ""
+          echo "Key files check:"
+          [ -f "./deploy/index.html" ] && echo "✅ index.html exists" || echo "❌ index.html missing"
+          [ -f "./deploy/$main_bundle" ] && echo "✅ $main_bundle exists" || echo "❌ $main_bundle missing"
+          
+          file_count=$(find ./deploy -type f 2>/dev/null | wc -l)
+          echo "Total files: $file_count"
+          
+          if [ "$file_count" -eq 0 ]; then
+            echo "❌ CRITICAL ERROR: No files to deploy!"
+            exit 1
+          fi
+          
+          echo "✅ Kotlin/JS deployment ready!"
 
-          echo "=== Final check for index.html ==="
-          ls -la ./deploy/index.html
-          head -n 20 ./deploy/index.html
-          echo "=== All files in deploy ==="
-          ls -la ./deploy/
-
-      # Deploy to Azure Static Web Apps
-      - name: Build And Deploy
-        id: builddeploy
+      - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
@@ -133,7 +233,6 @@ jobs:
     name: Close Pull Request Job
     steps:
       - name: Close Pull Request
-        id: closepullrequest
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
