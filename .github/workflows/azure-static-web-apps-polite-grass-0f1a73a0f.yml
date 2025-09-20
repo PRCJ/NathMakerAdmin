@@ -1,4 +1,63 @@
-# 🔍 ENHANCED DEBUG: Copy built files with extensive debugging
+name: Azure Static Web Apps CI/CD
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches:
+      - master
+
+jobs:
+  build_and_deploy_job:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+          lfs: false
+
+      # Add Java setup for Kotlin/Gradle build
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # Make gradlew executable
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # Update package lock file if needed
+      - name: Update Kotlin package lock
+        run: ./gradlew kotlinUpgradePackageLock --no-daemon
+        continue-on-error: true
+
+      # Build the project first
+      - name: Build project
+        run: ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
+
+      # Debug: Verify build output exists
+      - name: Debug distributions folder (recursive)
+        run: ls -R frontend/build/distributions
+
+      - name: Find index.html
+        run: find frontend/build/distributions -iname "index.html" || echo "index.html not found!"
+
+      # Verify deployment files before Azure deployment
+      - name: Verify deployment files
+        run: |
+          echo "=== Checking frontend/build/distributions ==="
+          ls -la frontend/build/distributions/
+          echo "=== Content of index.html (first 10 lines) ==="
+          head -n 10 frontend/build/distributions/index.html || echo "No index.html found"
+          echo "=== File count in distributions ==="
+          find frontend/build/distributions -type f | wc -l
+
+      # Enhanced debug version with comprehensive debugging
       - name: Copy built files to deployment location
         run: |
           echo "=========================================="
@@ -234,3 +293,29 @@
           echo "🎯 JS File: $js_filename"
           echo "📁 Total Files: $total_files"
           echo "=========================================="
+
+      # Deploy to Azure Static Web Apps
+      - name: Build And Deploy
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "deploy"
+          output_location: "."
+          api_location: ""
+          skip_app_build: true
+          skip_api_build: true
+
+  close_pull_request_job:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request Job
+    steps:
+      - name: Close Pull Request
+        id: closepullrequest
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
+          action: "close"
