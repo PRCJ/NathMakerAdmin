@@ -79,8 +79,18 @@ jobs:
           echo "=== Flattening directory structure if needed ==="
           if [ -d "./deploy/composeResources" ]; then
             echo "Found composeResources directory, moving files to root"
-            mv ./deploy/composeResources/* ./deploy/ 2>/dev/null || true
-            rmdir ./deploy/composeResources 2>/dev/null || true
+            echo "Contents before move:"
+            find ./deploy/composeResources -type f -exec ls -la {} \;
+            cp -r ./deploy/composeResources/* ./deploy/ 2>/dev/null || true
+            echo "Contents after move:"
+            ls -la ./deploy/
+          fi
+          
+          echo "=== Creating index.html if missing but other HTML files exist ==="
+          html_file=$(find ./deploy -name "*.html" -type f | head -1)
+          if [ ! -f "./deploy/index.html" ] && [ -n "$html_file" ]; then
+            echo "Found HTML file: $html_file, copying to index.html"
+            cp "$html_file" ./deploy/index.html
           fi
           
           echo "=== Final check for index.html ==="
@@ -89,9 +99,9 @@ jobs:
             ls -la ./deploy/index.html
             head -5 ./deploy/index.html
           else
-            echo "ERROR: index.html still not found after flattening"
+            echo "ERROR: index.html still not found"
             echo "Final directory contents:"
-            ls -la ./deploy/
+            find ./deploy -type f -exec ls -la {} \;
           fi
 
       # Deploy to Azure Static Web Apps (Alternative approach)
