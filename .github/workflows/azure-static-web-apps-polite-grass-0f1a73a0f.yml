@@ -29,11 +29,7 @@ jobs:
 
       # Make gradlew executable
       - name: Make gradlew executable
-        run: chmod +x ./gradlew  
-
-      - name: Confirm index.html exists
-        run: find frontend/build/distributions -iname "index.html"
-  
+        run: chmod +x ./gradlew
 
       # Update package lock file if needed
       - name: Update Kotlin package lock
@@ -44,12 +40,35 @@ jobs:
       - name: Build project
         run: ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
 
-      # Debug: list folders and check files
-      - name: Debug workspace root
-        run: ls -la 
+      # Debug: Verify build output exists
+      - name: Debug distributions folder (recursive)
+        run: ls -R frontend/build/distributions
 
-      - name: Debug frontend folder
-        run: ls -la frontend
+      - name: Find index.html
+        run: find frontend/build/distributions -iname "index.html" || echo "index.html not found!"
+
+      # Verify deployment files before Azure deployment
+      - name: Verify deployment files
+        run: |
+          echo "=== Checking frontend/build/distributions ==="
+          ls -la frontend/build/distributions/
+          echo "=== Content of index.html (first 10 lines) ==="
+          head -n 10 frontend/build/distributions/index.html || echo "No index.html found"
+          echo "=== File count in distributions ==="
+          find frontend/build/distributions -type f | wc -l
+
+      # Copy built files to deployment location
+      - name: Copy built files to deployment location
+        run: |
+          mkdir -p ./deploy
+          cp -r frontend/build/distributions/* ./deploy/
+          echo "=== Files copied to deploy folder ==="
+          ls -la ./deploy/
+          echo "=== Checking for index.html specifically ==="
+          ls -la ./deploy/index.html || echo "index.html not found in deploy folder!"
+          echo "=== All HTML files in deploy ==="
+          find ./deploy -name "*.html" -type f
+
       # Deploy to Azure Static Web Apps
       - name: Build And Deploy
         id: builddeploy
@@ -58,24 +77,12 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          # IMPORTANT: Don't point directly to the dist folder
           app_location: "/"
-          # Point to your built assets
-          output_location: "frontend/build/distributions"
+          output_location: "deploy"
           api_location: ""
-          # This is crucial - skip Azure's build process
           skip_app_build: true
-          
-      - name: Debug build folder
-        run: ls -la frontend/build
+          skip_api_build: true
 
-      - name: Debug distributions folder (recursive)
-        run: ls -R frontend/build/distributions
-
-      - name: Find index.html
-        run: find frontend/build/distributions -iname "index.html" || echo "index.html not found!"
-
-      
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
@@ -87,12 +94,3 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           action: "close"
-
-
-
-
-
-
-
-
-
