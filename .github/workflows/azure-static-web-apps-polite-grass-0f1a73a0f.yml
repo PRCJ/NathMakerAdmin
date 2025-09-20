@@ -57,12 +57,9 @@ jobs:
           echo "=== File count in distributions ==="
           find frontend/build/distributions -type f | wc -l
 
-      # Copy built files to deployment location
+      # ✅ Fixed: Copy built files + auto-detect JS bundle
       - name: Copy built files to deployment location
         run: |
-          echo "=== Before copying: Check source files ==="
-          find frontend/build/distributions -type f -name "*.html" -exec ls -la {} \;
-
           echo "=== Creating deploy directory ==="
           rm -rf ./deploy
           mkdir -p ./deploy
@@ -70,31 +67,23 @@ jobs:
           echo "=== Copying files using rsync ==="
           rsync -av frontend/build/distributions/ ./deploy/
 
-          echo "=== Complete file listing in deploy folder ==="
-          find ./deploy -type f -exec ls -la {} \;
-
           echo "=== Flattening directory structure if needed ==="
           if [ -d "./deploy/composeResources" ]; then
-            echo "Found composeResources directory, moving files to root"
             cp -r ./deploy/composeResources/* ./deploy/ 2>/dev/null || true
           fi
 
           echo "=== Looking for JavaScript files ==="
-          find ./deploy -name "*.js" -type f | grep -v ".map"
           js_files=$(find ./deploy -name "*.js" -type f | grep -v ".map" | head -1)
           if [ -n "$js_files" ]; then
             js_filename=$(basename "$js_files")
-            echo "Found JS file: $js_files"
-            echo "JS filename: $js_filename"
+            echo "Found JS file: $js_filename"
           else
-            echo "No JS files found, using default app.js"
+            echo "No JS files found, fallback to app.js"
             js_filename="app.js"
           fi
 
-      # ✅ FIXED SECTION: Create index.html properly with YAML block scalar
-      - name: Create index.html file
-        run: |
-          cat > ./deploy/index.html << 'EOF'
+          echo "=== Creating index.html file ==="
+          cat > ./deploy/index.html <<EOF
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -104,17 +93,16 @@ jobs:
           </head>
           <body>
               <div id="root"></div>
-              <script>
-                  console.log("HTML loaded, looking for app.js");
-              </script>
-              <script src="./app.js" onerror="console.error('Failed to load app.js')"></script>
+              <script src="./$js_filename"></script>
           </body>
           </html>
           EOF
 
-          echo "=== Created index.html ==="
+          echo "=== Final check for index.html ==="
           ls -la ./deploy/index.html
           head -n 20 ./deploy/index.html
+          echo "=== All files in deploy ==="
+          ls -la ./deploy/
 
       # Deploy to Azure Static Web Apps
       - name: Build And Deploy
