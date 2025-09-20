@@ -62,23 +62,23 @@ jobs:
         run: |
           echo "=== Before copying: Check source files ==="
           find frontend/build/distributions -type f -name "*.html" -exec ls -la {} \;
-          
+
           echo "=== Creating deploy directory ==="
           rm -rf ./deploy
           mkdir -p ./deploy
-          
+
           echo "=== Copying files using rsync ==="
           rsync -av frontend/build/distributions/ ./deploy/
-          
+
           echo "=== Complete file listing in deploy folder ==="
           find ./deploy -type f -exec ls -la {} \;
-          
+
           echo "=== Flattening directory structure if needed ==="
           if [ -d "./deploy/composeResources" ]; then
             echo "Found composeResources directory, moving files to root"
             cp -r ./deploy/composeResources/* ./deploy/ 2>/dev/null || true
           fi
-          
+
           echo "=== Looking for JavaScript files ==="
           find ./deploy -name "*.js" -type f | grep -v ".map"
           js_files=$(find ./deploy -name "*.js" -type f | grep -v ".map" | head -1)
@@ -90,40 +90,33 @@ jobs:
             echo "No JS files found, using default app.js"
             js_filename="app.js"
           fi
-          
-          echo "=== Creating index.html file ==="
-          cat > ./deploy/index.html << 'EOF'
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NathMaker Admin</title>
-</head>
-<body>
-    <div id="root"></div>
-    <script>
-        console.log("HTML loaded, looking for app.js");
-    </script>
-    <script src="./app.js" onerror="console.error('Failed to load app.js')"></script>
-</body>
-</html>
-EOF
-          
-          echo "=== Created index.html with JS file: $js_filename ==="
-          
-          echo "=== Final check for index.html ==="
-          if [ -f "./deploy/index.html" ]; then
-            echo "SUCCESS: index.html created!"
-            ls -la ./deploy/index.html
-            cat ./deploy/index.html
-            echo "=== All files in deploy ==="
-            ls -la ./deploy/
-          else
-            echo "ERROR: Failed to create index.html"
-          fi
 
-      # Deploy to Azure Static Web Apps (Alternative approach)
+      # ✅ FIXED SECTION: Create index.html properly with YAML block scalar
+      - name: Create index.html file
+        run: |
+          cat > ./deploy/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>NathMaker Admin</title>
+          </head>
+          <body>
+              <div id="root"></div>
+              <script>
+                  console.log("HTML loaded, looking for app.js");
+              </script>
+              <script src="./app.js" onerror="console.error('Failed to load app.js')"></script>
+          </body>
+          </html>
+          EOF
+
+          echo "=== Created index.html ==="
+          ls -la ./deploy/index.html
+          head -n 20 ./deploy/index.html
+
+      # Deploy to Azure Static Web Apps
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
