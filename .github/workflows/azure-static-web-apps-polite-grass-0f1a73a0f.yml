@@ -80,24 +80,38 @@ jobs:
           fi
           
           echo "=== Looking for JavaScript files ==="
+          find ./deploy -name "*.js" -type f | grep -v ".map"
           js_files=$(find ./deploy -name "*.js" -type f | grep -v ".map" | head -1)
-          echo "Found JS file: $js_files"
+          if [ -n "$js_files" ]; then
+            js_filename=$(basename "$js_files")
+            echo "Found JS file: $js_files"
+            echo "JS filename: $js_filename"
+          else
+            echo "No JS files found, using default app.js"
+            js_filename="app.js"
+          fi
           
           echo "=== Creating index.html file ==="
-          cat > ./deploy/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>NathMaker Admin</title>
-          </head>
-          <body>
-              <div id="root"></div>
-              <script src="./app.js"></script>
-          </body>
-          </html>
-          EOF
+          cat > ./deploy/index.html << EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NathMaker Admin</title>
+</head>
+<body>
+    <div id="root"></div>
+    <script>
+        console.log("Loading JavaScript file: $js_filename");
+        console.log("Available files in deploy directory:");
+    </script>
+    <script src="./$js_filename" onerror="console.error('Failed to load $js_filename')"></script>
+</body>
+</html>
+EOF
+          
+          echo "=== Created index.html with JS file: $js_filename ==="
           
           echo "=== Final check for index.html ==="
           if [ -f "./deploy/index.html" ]; then
