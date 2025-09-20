@@ -92,7 +92,7 @@ jobs:
           fi
           
           echo "=== Creating index.html file ==="
-          cat > ./deploy/index.html << EOF
+          cat > ./deploy/index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -103,10 +103,9 @@ jobs:
 <body>
     <div id="root"></div>
     <script>
-        console.log("Loading JavaScript file: $js_filename");
-        console.log("Available files in deploy directory:");
+        console.log("HTML loaded, looking for app.js");
     </script>
-    <script src="./$js_filename" onerror="console.error('Failed to load $js_filename')"></script>
+    <script src="./app.js" onerror="console.error('Failed to load app.js')"></script>
 </body>
 </html>
 EOF
