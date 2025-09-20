@@ -57,7 +57,7 @@ jobs:
           echo "=== File count in distributions ==="
           find frontend/build/distributions -type f | wc -l
 
-      # ✅ Fixed: Copy built files + auto-detect JS bundle
+      # ✅ Fixed: Copy built files + recursive JS detection
       - name: Copy built files to deployment location
         run: |
           echo "=== Creating deploy directory ==="
@@ -72,10 +72,9 @@ jobs:
             cp -r ./deploy/composeResources/* ./deploy/ 2>/dev/null || true
           fi
 
-          echo "=== Looking for JavaScript files ==="
-          js_files=$(find ./deploy -name "*.js" -type f | grep -v ".map")
+          echo "=== Looking for JavaScript files (recursive) ==="
+          js_files=$(find ./deploy -type f -name "*.js" | grep -v ".map")
           if [ -n "$js_files" ]; then
-            # Prefer JS file with "main" in name
             main_js=$(echo "$js_files" | grep "main" | head -1)
             if [ -n "$main_js" ]; then
               js_filename=$(basename "$main_js")
