@@ -1,124 +1,124 @@
-# Fixed deployment step with proper syntax
-      - name: Copy built files to deployment location
-        run: |
-          echo "Starting deployment file preparation"
-          
-          echo "Checking build output"
-          if [ -d "frontend/build" ]; then
-            echo "Build directory exists"
-            echo "All JS files in build directory:"
-            find frontend/build -name "*.js" -type f | grep -v ".map" | sort
-            
-            echo "Looking for specific files:"
-            find frontend/build -name "main.js" -type f && echo "Found main.js" || echo "No main.js"
-            find frontend/build -name "app.js" -type f && echo "Found app.js" || echo "No app.js"
-            find frontend/build -name "*main*.js" -type f && echo "Found main-like files" || echo "No main-like files"
-          fi
+name: Azure Static Web Apps CI/CD
 
-          echo "Creating deployment directory"
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches:
+      - master
+
+jobs:
+  build_and_deploy_job:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+          lfs: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Update Kotlin package lock
+        run: ./gradlew kotlinUpgradePackageLock --no-daemon
+        continue-on-error: true
+
+      - name: Build project
+        run: ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
+
+      - name: Debug build output
+        run: |
+          echo "Build completed, checking output:"
+          ls -la frontend/build/distributions/ || echo "No distributions directory"
+          find frontend/build -name "*.js" -type f | head -10 || echo "No JS files found"
+
+      - name: Prepare deployment
+        run: |
+          echo "Creating deploy directory"
           rm -rf ./deploy
           mkdir -p ./deploy
-
-          echo "Copying files"
-          if [ -d "frontend/build/distributions" ]; then
-            echo "Copying from distributions"
-            cp -r frontend/build/distributions/* ./deploy/ 2>/dev/null || echo "Copy had issues"
-          fi
-
-          echo "JavaScript file detection"
-          js_filename="main.js"
           
-          echo "Step 1: Look for main.js in deploy"
+          echo "Copying build files"
+          if [ -d "frontend/build/distributions" ]; then
+            cp -r frontend/build/distributions/* ./deploy/ || echo "Copy failed"
+          fi
+          
+          echo "Looking for JavaScript files"
+          js_file=""
+          
           if [ -f "./deploy/main.js" ]; then
+            js_file="main.js"
             echo "Found main.js in deploy"
-            js_filename="main.js"
           else
-            echo "No main.js in deploy, checking build"
-            
-            main_in_build=$(find frontend/build -name "main.js" -type f | head -1)
-            if [ -n "$main_in_build" ]; then
-              echo "Found main.js in build, copying"
-              cp "$main_in_build" ./deploy/main.js
-              js_filename="main.js"
+            build_main=$(find frontend/build -name "main.js" -type f | head -1)
+            if [ -n "$build_main" ]; then
+              cp "$build_main" ./deploy/main.js
+              js_file="main.js"
+              echo "Copied main.js from build"
             else
-              echo "No main.js found, looking for any JS file"
-              
               any_js=$(find frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
               if [ -n "$any_js" ]; then
-                js_filename=$(basename "$any_js")
-                echo "Using JS file: $js_filename"
-                cp "$any_js" "./deploy/$js_filename"
+                js_name=$(basename "$any_js")
+                cp "$any_js" "./deploy/$js_name"
+                js_file="$js_name"
+                echo "Using JS file: $js_file"
               else
-                echo "No JS files found, using fallback"
-                js_filename="app.js"
+                js_file="main.js"
+                echo "No JS files found, using fallback: $js_file"
               fi
             fi
           fi
-
-          echo "Selected JS file: $js_filename"
-
-          echo "Creating index.html"
-          cat > ./deploy/index.html << 'EOF'
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NathMaker Admin</title>
-</head>
-<body>
-    <div id="root"></div>
-    <script id="main-script"></script>
-    <script>
-        // Dynamic script loading with fallbacks
-        const scriptElement = document.getElementById('main-script');
-        const possibleFiles = ['PLACEHOLDER_JS', 'main.js', 'app.js', 'index.js'];
-        
-        async function loadScript(src) {
-            return new Promise((resolve) => {
-                const script = document.createElement('script');
-                script.src = src;
-                script.onload = () => resolve(true);
-                script.onerror = () => resolve(false);
-                document.body.appendChild(script);
-            });
-        }
-        
-        async function loadApp() {
-            for (const file of possibleFiles) {
-                const success = await loadScript('./' + file);
-                if (success) {
-                    console.log('Loaded:', file);
-                    return;
-                }
-            }
-            console.error('Failed to load any JS files');
-        }
-        
-        loadApp();
-    </script>
-</body>
-</html>
-EOF
-
-          # Replace placeholder with actual filename
-          sed -i "s/PLACEHOLDER_JS/$js_filename/g" ./deploy/index.html
-
-          echo "Verification"
-          echo "Files in deploy directory:"
+          
+          echo "Creating index.html with JS file: $js_file"
+          cat > ./deploy/index.html << EOF
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>NathMaker Admin</title>
+          </head>
+          <body>
+              <div id="root"></div>
+              <script src="./$js_file"></script>
+          </body>
+          </html>
+          EOF
+          
+          echo "Deployment files ready:"
           ls -la ./deploy/
           
-          echo "Content of index.html:"
-          head -20 ./deploy/index.html
-          
-          total_files=$(find ./deploy -type f | wc -l)
-          echo "Total files: $total_files"
-          
-          if [ "$total_files" -eq 0 ]; then
-            echo "ERROR: No files in deploy directory"
-            exit 1
-          fi
-          
-          echo "Deployment preparation completed"
-          echo "JS file: $js_filename"
-          echo "Total files: $total_files"
+          echo "Files created: $(find ./deploy -type f | wc -l)"
+
+      - name: Deploy to Azure
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "deploy"
+          output_location: "."
+          api_location: ""
+          skip_app_build: true
+          skip_api_build: true
+
+  close_pull_request_job:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request Job
+    steps:
+      - name: Close Pull Request
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
+          action: "close"
