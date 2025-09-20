@@ -60,14 +60,27 @@ jobs:
       # Copy built files to deployment location
       - name: Copy built files to deployment location
         run: |
+          echo "=== Before copying: Check source files ==="
+          ls -la frontend/build/distributions/
+          
+          echo "=== Creating deploy directory ==="
+          rm -rf ./deploy
           mkdir -p ./deploy
-          cp -r frontend/build/distributions/* ./deploy/
-          echo "=== Files copied to deploy folder ==="
+          
+          echo "=== Copying files using rsync ==="
+          rsync -av frontend/build/distributions/ ./deploy/
+          
+          echo "=== Files in deploy folder after copy ==="
           ls -la ./deploy/
-          echo "=== Checking for index.html specifically ==="
-          ls -la ./deploy/index.html || echo "index.html not found in deploy folder!"
-          echo "=== All HTML files in deploy ==="
-          find ./deploy -name "*.html" -type f
+          echo "=== Verifying index.html specifically ==="
+          if [ -f "./deploy/index.html" ]; then
+            echo "SUCCESS: index.html found in deploy folder!"
+            ls -la ./deploy/index.html
+          else
+            echo "ERROR: index.html still not found in deploy folder!"
+          fi
+          echo "=== All files in deploy ==="
+          find ./deploy -type f
 
       # Deploy to Azure Static Web Apps (Alternative approach)
       - name: Build And Deploy
