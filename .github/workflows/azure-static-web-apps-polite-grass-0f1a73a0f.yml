@@ -73,35 +73,41 @@ jobs:
           echo "=== Complete file listing in deploy folder ==="
           find ./deploy -type f -exec ls -la {} \;
           
-          echo "=== Looking for HTML files in subdirectories ==="
-          find ./deploy -name "*.html" -type f -exec ls -la {} \;
-          
           echo "=== Flattening directory structure if needed ==="
           if [ -d "./deploy/composeResources" ]; then
             echo "Found composeResources directory, moving files to root"
-            echo "Contents before move:"
-            find ./deploy/composeResources -type f -exec ls -la {} \;
             cp -r ./deploy/composeResources/* ./deploy/ 2>/dev/null || true
-            echo "Contents after move:"
-            ls -la ./deploy/
           fi
           
-          echo "=== Creating index.html if missing but other HTML files exist ==="
-          html_file=$(find ./deploy -name "*.html" -type f | head -1)
-          if [ ! -f "./deploy/index.html" ] && [ -n "$html_file" ]; then
-            echo "Found HTML file: $html_file, copying to index.html"
-            cp "$html_file" ./deploy/index.html
-          fi
+          echo "=== Looking for JavaScript files ==="
+          js_files=$(find ./deploy -name "*.js" -type f | grep -v ".map" | head -1)
+          echo "Found JS file: $js_files"
+          
+          echo "=== Creating index.html file ==="
+          cat > ./deploy/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>NathMaker Admin</title>
+          </head>
+          <body>
+              <div id="root"></div>
+              <script src="./app.js"></script>
+          </body>
+          </html>
+          EOF
           
           echo "=== Final check for index.html ==="
           if [ -f "./deploy/index.html" ]; then
-            echo "SUCCESS: index.html found!"
+            echo "SUCCESS: index.html created!"
             ls -la ./deploy/index.html
-            head -5 ./deploy/index.html
+            cat ./deploy/index.html
+            echo "=== All files in deploy ==="
+            ls -la ./deploy/
           else
-            echo "ERROR: index.html still not found"
-            echo "Final directory contents:"
-            find ./deploy -type f -exec ls -la {} \;
+            echo "ERROR: Failed to create index.html"
           fi
 
       # Deploy to Azure Static Web Apps (Alternative approach)
