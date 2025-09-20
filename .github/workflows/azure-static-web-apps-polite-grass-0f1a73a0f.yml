@@ -73,10 +73,16 @@ jobs:
           fi
 
           echo "=== Looking for JavaScript files ==="
-          js_files=$(find ./deploy -name "*.js" -type f | grep -v ".map" | head -1)
+          js_files=$(find ./deploy -name "*.js" -type f | grep -v ".map")
           if [ -n "$js_files" ]; then
-            js_filename=$(basename "$js_files")
-            echo "Found JS file: $js_filename"
+            # Prefer JS file with "main" in name
+            main_js=$(echo "$js_files" | grep "main" | head -1)
+            if [ -n "$main_js" ]; then
+              js_filename=$(basename "$main_js")
+            else
+              js_filename=$(basename $(echo "$js_files" | head -1))
+            fi
+            echo "Using JS file: $js_filename"
           else
             echo "No JS files found, fallback to app.js"
             js_filename="app.js"
