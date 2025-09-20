@@ -1,93 +1,172 @@
-name: Azure Static Web Apps CI/CD
-
-on:
-  push:
-    branches:
-      - master
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-    branches:
-      - master
-
-jobs:
-  build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
-    runs-on: ubuntu-latest
-    name: Build and Deploy Job
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-          lfs: false
-
-      # Add Java setup for Kotlin/Gradle build
-      - name: Set up JDK
-        uses: actions/setup-java@v3
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      # Make gradlew executable
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
-
-      # Update package lock file if needed
-      - name: Update Kotlin package lock
-        run: ./gradlew kotlinUpgradePackageLock --no-daemon
-        continue-on-error: true
-
-      # Build the project first
-      - name: Build project
-        run: ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
-
-      # Debug: Verify build output exists
-      - name: Debug distributions folder (recursive)
-        run: ls -R frontend/build/distributions
-
-      - name: Find index.html
-        run: find frontend/build/distributions -iname "index.html" || echo "index.html not found!"
-
-      # Verify deployment files before Azure deployment
-      - name: Verify deployment files
-        run: |
-          echo "=== Checking frontend/build/distributions ==="
-          ls -la frontend/build/distributions/
-          echo "=== Content of index.html (first 10 lines) ==="
-          head -n 10 frontend/build/distributions/index.html || echo "No index.html found"
-          echo "=== File count in distributions ==="
-          find frontend/build/distributions -type f | wc -l
-
-      # ✅ Fixed: Copy built files + recursive JS detection
+# 🔍 ENHANCED DEBUG: Copy built files with extensive debugging
       - name: Copy built files to deployment location
         run: |
-          echo "=== Creating deploy directory ==="
+          echo "=========================================="
+          echo "🔍 STARTING DEPLOYMENT FILE PREPARATION"
+          echo "=========================================="
+          
+          echo "=== 📁 INITIAL STATE CHECK ==="
+          echo "Current working directory: $(pwd)"
+          echo "Contents of current directory:"
+          ls -la
+          
+          echo ""
+          echo "=== 🏗️ BUILD OUTPUT ANALYSIS ==="
+          echo "Checking frontend/build structure:"
+          if [ -d "frontend/build" ]; then
+            find frontend/build -type f -name "*.js" -o -name "*.html" -o -name "*.css" | sort
+            echo ""
+            echo "All files in frontend/build:"
+            find frontend/build -type f | head -20
+            echo ""
+            echo "Directory structure:"
+            ls -la frontend/build/
+            if [ -d "frontend/build/distributions" ]; then
+              echo ""
+              echo "Contents of distributions:"
+              ls -la frontend/build/distributions/
+              echo ""
+              echo "Recursive listing of distributions:"
+              find frontend/build/distributions -type f -exec ls -la {} \;
+            fi
+          else
+            echo "❌ frontend/build directory not found!"
+          fi
+
+          echo ""
+          echo "=== 🚀 CREATING DEPLOYMENT DIRECTORY ==="
           rm -rf ./deploy
           mkdir -p ./deploy
+          echo "✅ Deploy directory created"
 
-          echo "=== Copying files using rsync ==="
-          rsync -av frontend/build/distributions/ ./deploy/
-
-          echo "=== Flattening directory structure if needed ==="
-          if [ -d "./deploy/composeResources" ]; then
-            cp -r ./deploy/composeResources/* ./deploy/ 2>/dev/null || true
-          fi
-
-          echo "=== Looking for JavaScript files (recursive) ==="
-          js_files=$(find ./deploy -type f -name "*.js" | grep -v ".map")
-          if [ -n "$js_files" ]; then
-            main_js=$(echo "$js_files" | grep "main" | head -1)
-            if [ -n "$main_js" ]; then
-              js_filename=$(basename "$main_js")
-            else
-              js_filename=$(basename $(echo "$js_files" | head -1))
-            fi
-            echo "Using JS file: $js_filename"
+          echo ""
+          echo "=== 📋 COPYING FILES ==="
+          echo "Attempting to copy from frontend/build/distributions to ./deploy"
+          
+          if [ -d "frontend/build/distributions" ]; then
+            echo "✅ Source directory exists, copying..."
+            rsync -av frontend/build/distributions/ ./deploy/ || {
+              echo "⚠️ rsync failed, trying cp..."
+              cp -r frontend/build/distributions/* ./deploy/ 2>/dev/null || {
+                echo "❌ Both rsync and cp failed!"
+                echo "Trying alternative copy methods..."
+                for file in frontend/build/distributions/*; do
+                  if [ -e "$file" ]; then
+                    cp -r "$file" ./deploy/ || echo "Failed to copy: $file"
+                  fi
+                done
+              }
+            }
+            echo "Copy operation completed"
           else
-            echo "No JS files found, fallback to app.js"
-            js_filename="app.js"
+            echo "❌ Source directory frontend/build/distributions does not exist!"
           fi
 
-          echo "=== Creating index.html file ==="
+          echo ""
+          echo "=== 📂 POST-COPY ANALYSIS ==="
+          echo "Contents of deploy directory after copy:"
+          ls -la ./deploy/ || echo "❌ Cannot list deploy directory"
+          
+          echo ""
+          echo "All files in deploy (recursive):"
+          find ./deploy -type f -exec ls -la {} \; 2>/dev/null || echo "❌ Cannot find files in deploy"
+
+          echo ""
+          echo "=== 🗂️ HANDLING COMPOSE RESOURCES ==="
+          if [ -d "./deploy/composeResources" ]; then
+            echo "✅ composeResources directory found"
+            echo "Contents of composeResources:"
+            ls -la ./deploy/composeResources/
+            echo ""
+            echo "Files in composeResources:"
+            find ./deploy/composeResources -type f -exec ls -la {} \;
+            echo ""
+            echo "Copying composeResources contents to deploy root..."
+            cp -r ./deploy/composeResources/* ./deploy/ 2>/dev/null && echo "✅ Copy successful" || echo "⚠️ Copy had issues"
+          else
+            echo "ℹ️ No composeResources directory found"
+          fi
+
+          echo ""
+          echo "=== 🔍 JAVASCRIPT FILE DETECTION ==="
+          echo "Searching for .js files in deploy directory..."
+          
+          # Method 1: Simple find
+          echo "Method 1 - Simple find:"
+          find ./deploy -name "*.js" -type f 2>/dev/null || echo "No JS files found with simple find"
+          
+          echo ""
+          echo "Method 2 - Find with details:"
+          js_files_raw=$(find ./deploy -name "*.js" -type f 2>/dev/null)
+          if [ -n "$js_files_raw" ]; then
+            echo "Raw JS files found:"
+            echo "$js_files_raw"
+            echo ""
+            echo "Details of each JS file:"
+            echo "$js_files_raw" | while read -r file; do
+              if [ -f "$file" ]; then
+                echo "📄 $file - Size: $(stat -c%s "$file" 2>/dev/null || echo 'unknown') bytes"
+              fi
+            done
+          else
+            echo "❌ No JS files found"
+          fi
+          
+          echo ""
+          echo "Method 3 - Filter out map files:"
+          js_files_filtered=""
+          if [ -n "$js_files_raw" ]; then
+            js_files_filtered=$(echo "$js_files_raw" | grep -v ".map" || true)
+            if [ -n "$js_files_filtered" ]; then
+              echo "✅ JS files after filtering .map files:"
+              echo "$js_files_filtered"
+            else
+              echo "⚠️ All JS files were .map files or filtering failed"
+            fi
+          fi
+
+          echo ""
+          echo "=== 🎯 SELECTING JS FILE ==="
+          js_filename="app.js"  # Default fallback
+          
+          if [ -n "$js_files_filtered" ] && [ "$js_files_filtered" != "" ]; then
+            echo "✅ JS files available for selection"
+            
+            # Look for main file
+            main_js=$(echo "$js_files_filtered" | grep -i "main" | head -1 || true)
+            if [ -n "$main_js" ] && [ "$main_js" != "" ]; then
+              js_filename=$(basename "$main_js")
+              echo "🎯 Selected MAIN JS file: $js_filename"
+              echo "📍 Full path: $main_js"
+            else
+              # Use first available
+              first_js=$(echo "$js_files_filtered" | head -1)
+              if [ -n "$first_js" ]; then
+                js_filename=$(basename "$first_js")
+                echo "🎯 Selected FIRST JS file: $js_filename"
+                echo "📍 Full path: $first_js"
+              fi
+            fi
+          else
+            echo "⚠️ No suitable JS files found, checking original build..."
+            
+            # Fallback to original build directory
+            original_js=$(find frontend/build -name "*.js" -type f 2>/dev/null | grep -v ".map" | head -1 || true)
+            if [ -n "$original_js" ] && [ -f "$original_js" ]; then
+              echo "✅ Found JS in original build: $original_js"
+              cp "$original_js" ./deploy/
+              js_filename=$(basename "$original_js")
+              echo "📋 Copied to deploy: $js_filename"
+            else
+              echo "❌ No JS files found anywhere! Using fallback: $js_filename"
+            fi
+          fi
+          
+          echo ""
+          echo "🏆 FINAL SELECTED JS FILE: $js_filename"
+
+          echo ""
+          echo "=== 📝 CREATING INDEX.HTML ==="
           cat > ./deploy/index.html <<EOF
           <!DOCTYPE html>
           <html lang="en">
@@ -102,35 +181,56 @@ jobs:
           </body>
           </html>
           EOF
+          
+          if [ -f "./deploy/index.html" ]; then
+            echo "✅ index.html created successfully"
+            echo "📄 File size: $(stat -c%s "./deploy/index.html" 2>/dev/null || echo 'unknown') bytes"
+            echo ""
+            echo "📋 Content of index.html:"
+            cat ./deploy/index.html
+          else
+            echo "❌ Failed to create index.html"
+            exit 1
+          fi
 
-          echo "=== Final check for index.html ==="
-          ls -la ./deploy/index.html
-          head -n 20 ./deploy/index.html
-          echo "=== All files in deploy ==="
-          ls -la ./deploy/
+          echo ""
+          echo "=== 🔍 FINAL VERIFICATION ==="
+          echo "📁 Final contents of deploy directory:"
+          ls -la ./deploy/ || echo "❌ Cannot list deploy directory"
+          
+          echo ""
+          echo "📊 File count and sizes:"
+          total_files=$(find ./deploy -type f 2>/dev/null | wc -l)
+          echo "Total files: $total_files"
+          
+          if [ "$total_files" -gt 0 ]; then
+            echo ""
+            echo "📋 All files with sizes:"
+            find ./deploy -type f -exec ls -lh {} \; | sort
+            
+            echo ""
+            echo "🔍 Checking if our key files exist:"
+            if [ -f "./deploy/index.html" ]; then
+              echo "✅ index.html exists"
+            else
+              echo "❌ index.html missing!"
+            fi
+            
+            if [ -f "./deploy/$js_filename" ]; then
+              echo "✅ JS file ($js_filename) exists"
+            else
+              echo "❌ JS file ($js_filename) missing!"
+              echo "🔍 Available JS files in deploy:"
+              find ./deploy -name "*.js" -type f || echo "None found"
+            fi
+          else
+            echo "❌ No files in deploy directory!"
+            exit 1
+          fi
 
-      # Deploy to Azure Static Web Apps
-      - name: Build And Deploy
-        id: builddeploy
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          action: "upload"
-          app_location: "deploy"
-          output_location: "."
-          api_location: ""
-          skip_app_build: true
-          skip_api_build: true
-
-  close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    name: Close Pull Request Job
-    steps:
-      - name: Close Pull Request
-        id: closepullrequest
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
-          action: "close"
+          echo ""
+          echo "=========================================="
+          echo "✅ DEPLOYMENT PREPARATION COMPLETED"
+          echo "🎯 JS File: $js_filename"
+          echo "📁 Total Files: $total_files"
+          echo "=========================================="
