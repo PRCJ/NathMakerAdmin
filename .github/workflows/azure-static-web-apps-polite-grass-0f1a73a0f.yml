@@ -20,67 +20,79 @@ jobs:
           submodules: true
           lfs: false
 
+      # Add Java setup for Kotlin/Gradle build
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
           java-version: '21'
           distribution: 'temurin'
 
+      # Make gradlew executable
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      # Update package lock file if needed
       - name: Update Kotlin package lock
         run: ./gradlew kotlinUpgradePackageLock --no-daemon
         continue-on-error: true
 
+      # Build the project first
       - name: Build project
         run: ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
 
-      - name: Debug build output
-        run: |
-          echo "Build completed, checking output:"
-          ls -la frontend/build/distributions/ || echo "No distributions directory"
-          find frontend/build -name "*.js" -type f | head -10 || echo "No JS files found"
+      # Debug: Verify build output exists
+      - name: Debug distributions folder (recursive)
+        run: ls -R frontend/build/distributions
 
-      - name: Prepare deployment
+      - name: Find index.html
+        run: find frontend/build/distributions -iname "index.html" || echo "index.html not found!"
+
+      # Verify deployment files before Azure deployment
+      - name: Verify deployment files
         run: |
-          echo "Creating deploy directory"
+          echo "=== Checking frontend/build/distributions ==="
+          ls -la frontend/build/distributions/
+          echo "=== Content of index.html (first 10 lines) ==="
+          head -n 10 frontend/build/distributions/index.html || echo "No index.html found"
+          echo "=== File count in distributions ==="
+          find frontend/build/distributions -type f | wc -l
+
+      # ✅ Fixed: Copy built files + move JS to root
+      - name: Copy built files to deployment location
+        run: |
+          echo "=== Creating deploy directory ==="
           rm -rf ./deploy
           mkdir -p ./deploy
-          
-          echo "Copying build files"
-          if [ -d "frontend/build/distributions" ]; then
-            cp -r frontend/build/distributions/* ./deploy/ || echo "Copy failed"
+
+          echo "=== Copying files using rsync ==="
+          rsync -av frontend/build/distributions/ ./deploy/
+
+          echo "=== Flattening directory structure if needed ==="
+          if [ -d "./deploy/composeResources" ]; then
+            cp -r ./deploy/composeResources/* ./deploy/ 2>/dev/null || true
           fi
-          
-          echo "Looking for JavaScript files"
-          js_file=""
-          
-          if [ -f "./deploy/main.js" ]; then
-            js_file="main.js"
-            echo "Found main.js in deploy"
-          else
-            build_main=$(find frontend/build -name "main.js" -type f | head -1)
-            if [ -n "$build_main" ]; then
-              cp "$build_main" ./deploy/main.js
-              js_file="main.js"
-              echo "Copied main.js from build"
+          if [ -d "./deploy/mathmakeradmin.frontend.generated.resources" ]; then
+            echo "Moving generated resources to root..."
+            cp -r ./deploy/mathmakeradmin.frontend.generated.resources/* ./deploy/ 2>/dev/null || true
+          fi
+
+          echo "=== Looking for JavaScript files in root ==="
+          js_files=$(find ./deploy -maxdepth 1 -type f -name "*.js" | grep -v ".map")
+          if [ -n "$js_files" ]; then
+            main_js=$(echo "$js_files" | grep "main" | head -1)
+            if [ -n "$main_js" ]; then
+              js_filename=$(basename "$main_js")
             else
-              any_js=$(find frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
-              if [ -n "$any_js" ]; then
-                js_name=$(basename "$any_js")
-                cp "$any_js" "./deploy/$js_name"
-                js_file="$js_name"
-                echo "Using JS file: $js_file"
-              else
-                js_file="main.js"
-                echo "No JS files found, using fallback: $js_file"
-              fi
+              js_filename=$(basename $(echo "$js_files" | head -1))
             fi
+            echo "Using JS file: $js_filename"
+          else
+            echo "No JS files found, fallback to app.js"
+            js_filename="app.js"
           fi
-          
-          echo "Creating index.html with JS file: $js_file"
-          cat > ./deploy/index.html << EOF
+
+          echo "=== Creating index.html file ==="
+          cat > ./deploy/index.html <<EOF
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -90,17 +102,20 @@ jobs:
           </head>
           <body>
               <div id="root"></div>
-              <script src="./$js_file"></script>
+              <script src="./$js_filename"></script>
           </body>
           </html>
           EOF
-          
-          echo "Deployment files ready:"
-          ls -la ./deploy/
-          
-          echo "Files created: $(find ./deploy -type f | wc -l)"
 
-      - name: Deploy to Azure
+          echo "=== Final check for index.html ==="
+          ls -la ./deploy/index.html
+          head -n 20 ./deploy/index.html
+          echo "=== All files in deploy ==="
+          ls -la ./deploy/
+
+      # Deploy to Azure Static Web Apps
+      - name: Build And Deploy
+        id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
@@ -118,6 +133,7 @@ jobs:
     name: Close Pull Request Job
     steps:
       - name: Close Pull Request
+        id: closepullrequest
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
