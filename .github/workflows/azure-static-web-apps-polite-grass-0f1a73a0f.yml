@@ -40,30 +40,36 @@ jobs:
       - name: Upgrade Kotlin JS package lock
         run: ./gradlew kotlinUpgradePackageLock
       
-      # Debug: Check source files before build
-      - name: Check source files
+      # Debug: Check actual project structure
+      - name: Check project structure
         run: |
-          echo "Checking for index.html in src/jsMain/resources:"
-          ls -la ./frontend/src/jsMain/resources/ || echo "❌ src/jsMain/resources directory not found"
-          test -f ./frontend/src/jsMain/resources/index.html && echo "✅ Source index.html found!" || echo "❌ Source index.html NOT found"
+          echo "=== Frontend directory structure ==="
+          find ./frontend/src -type f -name "*.html" 2>/dev/null || echo "No HTML files in src"
+          find ./frontend/src -type d 2>/dev/null | head -20 || echo "No src directory found"
+          echo "=== Looking for any HTML files in frontend ==="
+          find ./frontend -name "*.html" -type f 2>/dev/null || echo "No HTML files found anywhere in frontend"
+          echo "=== Looking for resources directories ==="
+          find ./frontend -name "resources" -type d 2>/dev/null || echo "No resources directories found"
       
-      # Build frontend module with production settings
+      # Build frontend with verbose output
       - name: Build frontend
-        run: ./gradlew :frontend:build -x test --no-daemon
-        env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2g"
-      
-      # Debug: List contents of build directory
-      - name: List build contents
         run: |
-          echo "Contents of frontend/build:"
-          ls -la ./frontend/build/ || echo "Build directory not found"
-          echo "Contents of frontend/build/distributions:"
-          ls -la ./frontend/build/distributions/ || echo "Distributions directory not found"
-          echo "Checking if index.html exists:"
-          test -f ./frontend/build/distributions/index.html && echo "✅ index.html found!" || echo "❌ index.html NOT found"
-          echo "Checking JavaScript files:"
-          ls -la ./frontend/build/distributions/*.js || echo "No JS files found"
+          echo "=== Running Gradle build with detailed output ==="
+          ./gradlew :frontend:build -x test --no-daemon --stacktrace
+          echo "=== Build completed, checking what was generated ==="
+      
+      # Debug: Detailed build output analysis
+      - name: Analyze build output
+        run: |
+          echo "=== Contents of distributions directory ==="
+          find ./frontend/build/distributions -type f 2>/dev/null || echo "No files in distributions"
+          echo "=== Contents of composeResources ==="
+          find ./frontend/build/distributions/composeResources -type f 2>/dev/null || echo "No files in composeResources"
+          echo "=== Looking for ALL generated files ==="
+          find ./frontend/build -name "*.js" -type f 2>/dev/null || echo "No JS files found anywhere in build"
+          find ./frontend/build -name "*.html" -type f 2>/dev/null || echo "No HTML files found anywhere in build"
+          echo "=== Check dist directory ==="
+          ls -la ./frontend/build/dist/ 2>/dev/null || echo "No dist directory"
       
       # Deploy to Azure Static Web Apps
       - name: Deploy to Azure Static Web Apps
