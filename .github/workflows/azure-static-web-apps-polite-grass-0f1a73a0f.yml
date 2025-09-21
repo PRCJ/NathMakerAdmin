@@ -51,25 +51,28 @@ jobs:
           echo "=== Looking for resources directories ==="
           find ./frontend -name "resources" -type d 2>/dev/null || echo "No resources directories found"
       
-      # Build frontend with verbose output
+      # Build frontend with browser production webpack
       - name: Build frontend
         run: |
-          echo "=== Running Gradle build with detailed output ==="
-          ./gradlew :frontend:build -x test --no-daemon --stacktrace
-          echo "=== Build completed, checking what was generated ==="
+          echo "=== Running Gradle production build ==="
+          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --stacktrace
+          echo "=== Build completed ==="
       
-      # Debug: Detailed build output analysis
-      - name: Analyze build output
+      # Verify build output
+      - name: Verify build output
         run: |
-          echo "=== Contents of distributions directory ==="
-          find ./frontend/build/distributions -type f 2>/dev/null || echo "No files in distributions"
-          echo "=== Contents of composeResources ==="
-          find ./frontend/build/distributions/composeResources -type f 2>/dev/null || echo "No files in composeResources"
-          echo "=== Looking for ALL generated files ==="
-          find ./frontend/build -name "*.js" -type f 2>/dev/null || echo "No JS files found anywhere in build"
-          find ./frontend/build -name "*.html" -type f 2>/dev/null || echo "No HTML files found anywhere in build"
-          echo "=== Check dist directory ==="
-          ls -la ./frontend/build/dist/ 2>/dev/null || echo "No dist directory"
+          echo "=== Checking final build output ==="
+          echo "Distributions directory contents:"
+          find ./frontend/build/distributions -type f 2>/dev/null | head -20 || echo "No files found"
+          
+          echo "Checking for index.html:"
+          test -f "./frontend/build/distributions/index.html" && echo "✅ index.html found!" || echo "❌ index.html not found"
+          
+          echo "Checking for frontend.js:"
+          test -f "./frontend/build/distributions/frontend.js" && echo "✅ frontend.js found!" || echo "❌ frontend.js not found"
+          
+          echo "All files in distributions:"
+          find ./frontend/build/distributions -name "*" -type f 2>/dev/null || echo "No files"
       
       # Deploy to Azure Static Web Apps
       - name: Deploy to Azure Static Web Apps
