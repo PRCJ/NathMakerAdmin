@@ -32,7 +32,7 @@ kotlin {
             webpackTask {
                 output.libraryTarget = "umd"
                 mainOutputFileName = "frontend.js"
-                // 👇 after webpack finishes, copy index.html into distributions
+                // 👇 after webpack finishes, copy index.html into distributions frontend js added
                 doLast {
                     copy {
                         from("$projectDir/src/jsMain/resources")
