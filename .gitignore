@@ -1,27 +1,30 @@
-.gradle
+### Gradle ###
+.gradle/
 build/
 !gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
 
-# Ignore everything in build
+### Ignore everything inside build by default ###
 frontend/build/*
 
-# Allow distributions
+### But allow the distributions folder (and everything inside it) ###
 !frontend/build/distributions/
 !frontend/build/distributions/**
 
+### Allow composeResources folder for static website hosting ###
+!frontend/build/composeResources/
+!frontend/build/composeResources/**
+
+
+# Allow Kotlin JS lock store for reproducible builds
+!kotlin-js-store/
+!kotlin-js-store/**
+
 ### IntelliJ IDEA ###
-.idea/modules.xml
-.idea/jarRepositories.xml
-.idea/compiler.xml
-.idea/libraries/
+.idea/
 *.iws
 *.iml
 *.ipr
 out/
-!**/src/main/**/out/
-!**/src/test/**/out/
 
 ### Eclipse ###
 .apt_generated
@@ -32,8 +35,6 @@ out/
 .springBeans
 .sts4-cache
 bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
 
 ### NetBeans ###
 /nbproject/private/
@@ -45,5 +46,6 @@ bin/
 ### VS Code ###
 .vscode/
 
-### Mac OS ###
+### OS ###
 .DS_Store
+Thumbs.db
