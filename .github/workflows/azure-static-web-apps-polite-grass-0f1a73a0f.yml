@@ -3,7 +3,7 @@ name: Azure Static Web Apps CI/CD
 on:
   push:
     branches:
-      - master   # adjust if you use main
+      - master
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
@@ -20,40 +20,62 @@ jobs:
         with:
           submodules: true
           lfs: false
-
+      
       # Setup JDK for Gradle
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
-
+      
       # Cache Gradle dependencies
       - name: Set up Gradle
         uses: gradle/gradle-build-action@v2
-
+      
       # Ensure gradlew is executable
       - name: Make gradlew executable
         run: chmod +x ./gradlew
-
+      
       # Upgrade lock if needed (safe for CI)
       - name: Upgrade Kotlin JS package lock
         run: ./gradlew kotlinUpgradePackageLock
-
-      # Build frontend module
+      
+      # Debug: Check source files before build
+      - name: Check source files
+        run: |
+          echo "Checking for index.html in src/jsMain/resources:"
+          ls -la ./frontend/src/jsMain/resources/ || echo "❌ src/jsMain/resources directory not found"
+          test -f ./frontend/src/jsMain/resources/index.html && echo "✅ Source index.html found!" || echo "❌ Source index.html NOT found"
+      
+      # Build frontend module with production settings
       - name: Build frontend
-        run: ./gradlew :frontend:build
-
+        run: ./gradlew :frontend:build -x test --no-daemon
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2g"
+      
+      # Debug: List contents of build directory
+      - name: List build contents
+        run: |
+          echo "Contents of frontend/build:"
+          ls -la ./frontend/build/ || echo "Build directory not found"
+          echo "Contents of frontend/build/distributions:"
+          ls -la ./frontend/build/distributions/ || echo "Distributions directory not found"
+          echo "Checking if index.html exists:"
+          test -f ./frontend/build/distributions/index.html && echo "✅ index.html found!" || echo "❌ index.html NOT found"
+          echo "Checking JavaScript files:"
+          ls -la ./frontend/build/distributions/*.js || echo "No JS files found"
+      
       # Deploy to Azure Static Web Apps
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}   # For GitHub integration (PR comments, etc.)
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "./frontend"                # Frontend project root
-          api_location: ""                          # No Functions backend
-          output_location: "build/distributions"    # Where index.html is created
+          app_location: "./frontend"
+          api_location: ""
+          output_location: "build/distributions"
+          skip_app_build: true
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
