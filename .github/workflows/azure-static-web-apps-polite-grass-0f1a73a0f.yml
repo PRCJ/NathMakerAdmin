@@ -3,11 +3,11 @@ name: Azure Static Web Apps CI/CD
 on:
   push:
     branches:
-      - main   # ✅ Change this if your repo uses "main" (or back to master if that's your branch)
+      - master   # ✅ using master since that's your repo branch
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
-      - main   # ✅ Keep consistent with above
+      - master
 
 jobs:
   build_and_deploy_job:
