@@ -6,15 +6,6 @@ build/
 ### Ignore everything inside build by default ###
 frontend/build/*
 
-### But allow the distributions folder (and everything inside it) ###
-!frontend/build/distributions/
-!frontend/build/distributions/**
-
-### Allow composeResources folder for static website hosting ###
-!frontend/build/composeResources/
-!frontend/build/composeResources/**
-
-
 # Allow Kotlin JS lock store for reproducible builds
 !kotlin-js-store/
 !kotlin-js-store/**

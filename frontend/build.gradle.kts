@@ -31,7 +31,7 @@ kotlin {
 
             webpackTask {
                 output.libraryTarget = "umd"
-                mainOutputFileName = "app.js"
+                mainOutputFileName = "frontend.js"
                 // 👇 after webpack finishes, copy index.html into distributions
                 doLast {
                     copy {
