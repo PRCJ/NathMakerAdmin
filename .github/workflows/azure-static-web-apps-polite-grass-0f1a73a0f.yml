@@ -58,21 +58,14 @@ jobs:
           ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --stacktrace
           echo "=== Build completed ==="
       
-      # Verify build output
-      - name: Verify build output
+      # Copy built files to frontend root for deployment
+      - name: Copy built files for deployment
         run: |
-          echo "=== Checking final build output ==="
-          echo "Distributions directory contents:"
-          find ./frontend/build/distributions -type f 2>/dev/null | head -20 || echo "No files found"
-          
-          echo "Checking for index.html:"
-          test -f "./frontend/build/distributions/index.html" && echo "✅ index.html found!" || echo "❌ index.html not found"
-          
-          echo "Checking for frontend.js:"
-          test -f "./frontend/build/distributions/frontend.js" && echo "✅ frontend.js found!" || echo "❌ frontend.js not found"
-          
-          echo "All files in distributions:"
-          find ./frontend/build/distributions -name "*" -type f 2>/dev/null || echo "No files"
+          echo "Copying built files to frontend root"
+          cp ./frontend/build/distributions/index.html ./frontend/
+          cp ./frontend/build/distributions/frontend.js ./frontend/
+          echo "Files copied successfully"
+          ls ./frontend/index.html ./frontend/frontend.js
       
       # Deploy to Azure Static Web Apps
       - name: Deploy to Azure Static Web Apps
@@ -81,9 +74,9 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "./frontend/build/distributions"   # Point directly to where files are built
+          app_location: "./frontend"          # Back to frontend root where we copied the files
           api_location: ""
-          output_location: ""                              # Empty since files are already in the right place
+          output_location: ""                 # Files are already in the right place
           skip_app_build: true
 
   close_pull_request_job:
