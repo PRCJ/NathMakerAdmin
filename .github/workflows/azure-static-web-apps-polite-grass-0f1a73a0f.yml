@@ -3,11 +3,11 @@ name: Azure Static Web Apps CI/CD
 on:
   push:
     branches:
-      - master
+      - main   # ✅ Change this if your repo uses "main" (or back to master if that's your branch)
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
-      - master
+      - main   # ✅ Keep consistent with above
 
 jobs:
   build_and_deploy_job:
@@ -20,141 +20,86 @@ jobs:
         with:
           submodules: true
           lfs: false
-      
+
       # Setup JDK for Gradle
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
-      
+
       # Cache Gradle dependencies
       - name: Set up Gradle
         uses: gradle/gradle-build-action@v2
-      
+
       # Ensure gradlew is executable
       - name: Make gradlew executable
         run: chmod +x ./gradlew
-      
-      # Upgrade lock if needed (safe for CI)
+
+      # Upgrade lock if needed
       - name: Upgrade Kotlin JS package lock
         run: ./gradlew kotlinUpgradePackageLock
-      
-      # Debug environment differences
+
+      # Debug environment
       - name: Debug environment
         run: |
-          echo "=== Environment Debug ==="
           ./gradlew --version
-          echo "Java version: $JAVA_HOME"
-          echo "Gradle daemon status:"
+          java -version
           ./gradlew --status || echo "No daemons running"
-      
-      # Build frontend exactly like local (with explicit path handling)
+
+      # Build frontend
       - name: Build frontend  
         run: |
-          echo "=== Running the same task that works locally ==="
-          echo "Current directory: $(pwd)"
-          echo "Frontend build.gradle.kts exists: $(test -f frontend/build.gradle.kts && echo 'YES' || echo 'NO')"
-          
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info --stacktrace
-          
-          echo "=== Checking if files were generated ==="
-          if [ -f "./frontend/build/distributions/index.html" ]; then
-            echo "✅ index.html generated successfully"
-          else
-            echo "❌ index.html not generated, trying production webpack task"
-            ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --info --stacktrace
-          fi
-          
-          echo "=== Final check ==="
-          find ./frontend/build -name "*.html" -o -name "*.js" | head -10
-      
-      # Debug what was actually built
-      - name: Debug build output
-        run: |
-          echo "=== Checking what was actually built ==="
-          find ./frontend/build -name "*.html" -type f 2>/dev/null || echo "No HTML files found anywhere"
-          find ./frontend/build -name "*.js" -type f 2>/dev/null || echo "No JS files found anywhere"
-          echo "=== Directory structure ==="
-          find ./frontend/build -type d 2>/dev/null | head -20 || echo "No build directories"
-          echo "=== All files in build ==="
-          find ./frontend/build -type f 2>/dev/null | head -20 || echo "No files in build"
+          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info --stacktrace || \
+          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --info --stacktrace
 
-      # Create index.html manually since doLast blocks don't work in CI
+          echo "=== Build output check ==="
+          find ./frontend/build -name "*.html" -o -name "*.js" | head -20
+
+      # Create index.html manually
       - name: Create index.html for deployment
         run: |
-          echo "Creating index.html manually"
           mkdir -p ./frontend/build/distributions
-          
           cat > ./frontend/build/distributions/index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NathMaker Admin</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-        }
-        #loading {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            font-size: 18px;
-            color: #666;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NathMaker Admin</title>
 </head>
 <body>
-    <div id="root">
-        <div id="loading">Loading NathMaker Admin...</div>
-    </div>
-    <script src="frontend.js"></script>
+  <div id="root">Loading NathMaker Admin...</div>
+  <script src="frontend.js"></script>
 </body>
 </html>
 EOF
-          echo "✅ index.html created successfully"
 
-      # Copy built files to frontend root for deployment  
+      # Copy built files for deployment  
       - name: Copy built files for deployment
         run: |
-          echo "Copying built files to frontend root"
-          
-          # Copy the manually created index.html
           cp ./frontend/build/distributions/index.html ./frontend/
-          
-          # Find the actual JS file generated by the build
-          JS_FILE=$(find ./frontend/build -name "frontend.js" -type f | head -1)
+          JS_FILE=$(find ./frontend/build -name "frontend.js" -type f | head -1 || true)
           if [ -z "$JS_FILE" ]; then
-            echo "Looking for any JS file in build output..."
-            JS_FILE=$(find ./frontend/build -name "*.js" -type f | head -1)
+            JS_FILE=$(find ./frontend/build -name "*.js" -type f | head -1 || true)
           fi
-          
           if [ -n "$JS_FILE" ]; then
-            echo "Found JS file: $JS_FILE"
             cp "$JS_FILE" ./frontend/frontend.js
           else
             echo "ERROR: No JS files found in build output"
             exit 1
           fi
-          
-          echo "Files copied successfully"
-          ls -la ./frontend/index.html ./frontend/frontend.js
-      
-      # Deploy to Azure Static Web Apps
+
+      # ✅ Deploy to Azure Static Web Apps
       - name: Deploy to Azure Static Web Apps
-        uses: Azure/static-web-apps-deploy@v1
+        uses: Azure/static-web-apps-deploy@v1.1.0   # pinned stable version
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "./frontend"          # Back to frontend root where we copied the files
+          app_location: "./frontend"
           api_location: ""
-          output_location: ""                 # Files are already in the right place
+          output_location: ""
           skip_app_build: true
 
   close_pull_request_job:
@@ -163,7 +108,7 @@ EOF
     name: Close Pull Request Job
     steps:
       - name: Close Pull Request
-        uses: Azure/static-web-apps-deploy@v1
+        uses: Azure/static-web-apps-deploy@v1.1.0
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           action: "close"
