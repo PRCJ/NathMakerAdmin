@@ -3,7 +3,7 @@ name: Azure Static Web Apps CI/CD
 on:
   push:
     branches:
-      - master   # adjust if you use main
+      - master
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
@@ -20,40 +20,68 @@ jobs:
         with:
           submodules: true
           lfs: false
-
+      
       # Setup JDK for Gradle
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
-
+      
       # Cache Gradle dependencies
       - name: Set up Gradle
         uses: gradle/gradle-build-action@v2
-
+      
       # Ensure gradlew is executable
       - name: Make gradlew executable
         run: chmod +x ./gradlew
-
+      
       # Upgrade lock if needed (safe for CI)
       - name: Upgrade Kotlin JS package lock
         run: ./gradlew kotlinUpgradePackageLock
-
-      # Build frontend module
+      
+      # Debug: Check actual project structure
+      - name: Check project structure
+        run: |
+          echo "=== Frontend directory structure ==="
+          find ./frontend/src -type f -name "*.html" 2>/dev/null || echo "No HTML files in src"
+          find ./frontend/src -type d 2>/dev/null | head -20 || echo "No src directory found"
+          echo "=== Looking for any HTML files in frontend ==="
+          find ./frontend -name "*.html" -type f 2>/dev/null || echo "No HTML files found anywhere in frontend"
+          echo "=== Looking for resources directories ==="
+          find ./frontend -name "resources" -type d 2>/dev/null || echo "No resources directories found"
+      
+      # Build frontend with verbose output
       - name: Build frontend
-        run: ./gradlew :frontend:build
-
+        run: |
+          echo "=== Running Gradle build with detailed output ==="
+          ./gradlew :frontend:build -x test --no-daemon --stacktrace
+          echo "=== Build completed, checking what was generated ==="
+      
+      # Debug: Detailed build output analysis
+      - name: Analyze build output
+        run: |
+          echo "=== Contents of distributions directory ==="
+          find ./frontend/build/distributions -type f 2>/dev/null || echo "No files in distributions"
+          echo "=== Contents of composeResources ==="
+          find ./frontend/build/distributions/composeResources -type f 2>/dev/null || echo "No files in composeResources"
+          echo "=== Looking for ALL generated files ==="
+          find ./frontend/build -name "*.js" -type f 2>/dev/null || echo "No JS files found anywhere in build"
+          find ./frontend/build -name "*.html" -type f 2>/dev/null || echo "No HTML files found anywhere in build"
+          echo "=== Check dist directory ==="
+          ls -la ./frontend/build/dist/ 2>/dev/null || echo "No dist directory"
+      
       # Deploy to Azure Static Web Apps
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}   # For GitHub integration (PR comments, etc.)
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "./frontend"                # Frontend project root
-          api_location: ""                          # No Functions backend
-          output_location: "build/distributions"    # Where index.html is created
+          app_location: "./frontend"
+          api_location: ""
+          output_location: "build/distributions"
+          skip_app_build: true
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
