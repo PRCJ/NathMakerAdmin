@@ -41,13 +41,14 @@ jobs:
           java -version
           ./gradlew --status || echo "No daemons running"
 
-      - name: Build frontend
-        run: |
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info --stacktrace || \
-          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --info --stacktrace
+      # Build attempt 1
+      - name: Build frontend (distribution)
+        run: ./gradlew :frontend:jsBrowserDistribution --no-daemon --info --stacktrace
 
-          echo "=== Build output check ==="
-          find ./frontend/build -name "*.html" -o -name "*.js" | head -20
+      # Build attempt 2 (fallback)
+      - name: Build frontend (production webpack if needed)
+        if: failure()
+        run: ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --info --stacktrace
 
       - name: Ensure index.html for deployment
         run: |
@@ -72,9 +73,8 @@ EOF
 
       - name: Debug final build output
         run: |
-          echo "=== Listing files in distributions folder ==="
+          echo "=== Files in distributions folder ==="
           ls -la ./frontend/build/distributions || echo "No distributions folder"
-          echo "=== Top 20 files ==="
           find ./frontend/build/distributions -type f | head -20 || echo "No files found"
 
       - name: Deploy to Azure Static Web Apps
