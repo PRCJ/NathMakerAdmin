@@ -57,7 +57,33 @@ jobs:
       - name: Create deployment directory
         run: |
           mkdir -p ./deployment
-          cp -r ./frontend/build/distributions/* ./deployment/
+          
+          # Find main JS file from distribution output
+          MAIN_FILE=$(find ./frontend/build/distributions -name "*.js" -type f | grep -v ".map" | head -1)
+          if [ -z "$MAIN_FILE" ]; then
+            echo "No JS bundle found in distributions!"
+            exit 1
+          fi
+          
+          FILE_NAME=$(basename "$MAIN_FILE")
+          cp "$MAIN_FILE" ./deployment/
+          JS_NAME="$FILE_NAME"
+          
+          # Create index.html
+          cat > ./deployment/index.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>NathMaker Admin</title>
+          </head>
+          <body>
+              <div id="root"></div>
+              <script src="$JS_NAME"></script>
+          </body>
+          </html>
+          EOF
           
           echo "Deployment files:"
           ls -la ./deployment/
