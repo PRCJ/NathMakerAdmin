@@ -39,60 +39,9 @@ jobs:
           
       - name: Debug build output
         run: |
-          echo "=== Checking Kotlin/JS output directory ==="
-          find ./frontend/build -type d -name "dist" || echo "No dist directory found"
-          find ./frontend/build -path "*/dist/js/*" -name "*.js" -type f | head -10 || echo "No JS files in dist/js"
-          find ./frontend/build -name "*.js" -type f | head -10 || echo "No JS files found anywhere"
-          echo "=== Full directory structure ==="
-          find ./frontend/build -type d | head -20
-      
-      - name: Prepare deployment directory
-        run: |
-          # Find the actual Kotlin/JS output directory
-          if [ -d "./frontend/build/dist/js/productionExecutable" ]; then
-            echo "Using standard Kotlin/JS output directory"
-            DEPLOY_DIR="./frontend/build/dist/js/productionExecutable"
-          elif [ -d "./frontend/build/distributions" ]; then
-            echo "Using distributions directory"
-            DEPLOY_DIR="./frontend/build/distributions"
-          else
-            echo "Looking for JS files in build output..."
-            JS_DIR=$(find ./frontend/build -name "*.js" -type f -exec dirname {} \; | head -1)
-            if [ -n "$JS_DIR" ]; then
-              DEPLOY_DIR="$JS_DIR"
-              echo "Using directory with JS files: $DEPLOY_DIR"
-            else
-              echo "No suitable deployment directory found!"
-              exit 1
-            fi
-          fi
-          
-          # Create index.html if it doesn't exist
-          if [ ! -f "$DEPLOY_DIR/index.html" ]; then
-            echo "Creating index.html..."
-            JS_FILE=$(find "$DEPLOY_DIR" -name "*.js" -type f | grep -v ".map" | head -1)
-            if [ -n "$JS_FILE" ]; then
-              JS_FILENAME=$(basename "$JS_FILE")
-              cat > "$DEPLOY_DIR/index.html" << EOF
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NathMaker Admin</title>
-</head>
-<body>
-    <div id="root"></div>
-    <script src="$JS_FILENAME"></script>
-</body>
-</html>
-EOF
-            fi
-          fi
-          
-          echo "DEPLOY_DIR=$DEPLOY_DIR" >> $GITHUB_ENV
-          echo "Deployment directory contents:"
-          ls -la "$DEPLOY_DIR"
+          echo "=== Checking build output ==="
+          find ./frontend/build -name "*.js" -type f | head -10 || echo "No JS files found"
+          ls -la ./frontend/build/dist/js/productionExecutable/ || echo "Standard path not found"
       
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
@@ -100,7 +49,7 @@ EOF
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "${{ env.DEPLOY_DIR }}"
+          app_location: "./frontend/build/dist/js/productionExecutable"
           api_location: ""
           output_location: ""
           skip_app_build: true
