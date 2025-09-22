@@ -63,112 +63,71 @@ jobs:
           # Alternative: try distribution task
           ./gradlew :frontend:jsBrowserDistribution --no-daemon --info || echo "Distribution task not found"
       
-      - name: Locate and Prepare Frontend Assets
+      - name: Create deployment directory
         run: |
-          echo "=== Searching for built frontend assets ==="
-          
-          # Common Kotlin/JS build output locations
-          POSSIBLE_DIRS=(
-            "./frontend/build/dist/js/productionExecutable"
-            "./frontend/build/distributions"
-            "./frontend/build/processedResources/js/main"
-            "./frontend/build/compileSync/js/main/productionExecutable/kotlin"
-            "./frontend/build/js/packages/frontend/kotlin"
-          )
-          
-          BUILD_DIR=""
-          for dir in "${POSSIBLE_DIRS[@]}"; do
-            if [ -d "$dir" ] && [ "$(ls -A $dir 2>/dev/null)" ]; then
-              BUILD_DIR="$dir"
-              echo "Found build directory: $BUILD_DIR"
-              break
-            fi
-          done
-          
-          if [ -z "$BUILD_DIR" ]; then
-            echo "Searching for any JS files in build directory..."
-            find ./frontend/build -name "*.js" -type f | head -10
-            
-            echo "Build directory structure:"
-            find ./frontend/build -type d | head -20
-            
-            echo "ERROR: Could not locate frontend build output"
-            exit 1
-          fi
-          
-          # Create deployment directory
           mkdir -p ./deployment
           
-          # Copy all files from build directory
-          echo "Copying files from $BUILD_DIR to deployment..."
-          cp -r "$BUILD_DIR"/* ./deployment/ 2>/dev/null || echo "No files to copy with /*"
+          # Try multiple patterns to find the main file (using your original logic)
+          MAIN_FILE=""
           
-          # Look for the main JS file
-          MAIN_JS=$(find ./deployment -name "*.js" -not -name "*.map" | head -1)
-          if [ -z "$MAIN_JS" ]; then
-            echo "ERROR: No JavaScript files found in deployment directory"
-            ls -la ./deployment/
+          # Pattern 1: Look for .js files
+          MAIN_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
+          
+          # Pattern 2: Look for files without extension that might be JS
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -name "*frontend*" -type f | head -1)
+          fi
+          
+          # Pattern 3: Look for main files
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -name "*main*" -type f | head -1)
+          fi
+          
+          # Pattern 4: Look in distributions folder
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -path "*/distributions/*" -type f | head -1)
+          fi
+          
+          if [ -z "$MAIN_FILE" ]; then
+            echo "No suitable main file found!"
+            echo "=== All files in build directory ==="
+            find ./frontend/build -type f | head -20
             exit 1
           fi
           
-          MAIN_JS_NAME=$(basename "$MAIN_JS")
-          echo "Main JS file: $MAIN_JS_NAME"
+          echo "Found main file: $MAIN_FILE"
+          FILE_NAME=$(basename "$MAIN_FILE")
           
-          # Create index.html that calls your API
+          # Copy main file to deployment (rename to .js if needed)
+          if [[ "$FILE_NAME" == *.js ]]; then
+            cp "$MAIN_FILE" ./deployment/
+            JS_NAME="$FILE_NAME"
+          else
+            cp "$MAIN_FILE" "./deployment/${FILE_NAME}.js"
+            JS_NAME="${FILE_NAME}.js"
+          fi
+          
+          # Create index.html
           cat > ./deployment/index.html << 'EOF'
           <!DOCTYPE html>
-          <html lang="en">
+          <html>
           <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
               <title>NathMaker Admin</title>
-              <style>
-                  body { 
-                      margin: 0; 
-                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-                  }
-                  #root { 
-                      min-height: 100vh; 
-                  }
-                  .loading { 
-                      display: flex; 
-                      justify-content: center; 
-                      align-items: center; 
-                      height: 100vh; 
-                  }
-              </style>
           </head>
           <body>
-              <div id="root">
-                  <div class="loading">Loading NathMaker Admin...</div>
-              </div>
-              
-              <script>
-                  // Configure API base URL - matches your frontend code
-                  window.API_BASE_URL = 'https://api.nathmakers.com';
-                  
-                  // Add CORS handling if needed
-                  window.addEventListener('error', function(e) {
-                      console.error('Application error:', e.error);
-                  });
-                  
-                  // Debug logging for API calls
-                  console.log('API Base URL configured:', window.API_BASE_URL);
-              </script>
-              
-              <script src="MAIN_JS_PLACEHOLDER"></script>
+              <div id="root"></div>
+              <script src="SCRIPT_NAME"></script>
           </body>
           </html>
           EOF
           
-          # Replace placeholder with actual JS filename
-          sed -i "s/MAIN_JS_PLACEHOLDER/$MAIN_JS_NAME/g" ./deployment/index.html
+          # Replace placeholder with actual script name
+          sed -i "s/SCRIPT_NAME/$JS_NAME/g" ./deployment/index.html
           
-          echo "=== Deployment directory contents ==="
+          echo "Deployment files:"
           ls -la ./deployment/
-          
-          echo "=== Generated index.html ==="
-          cat ./deployment/index.html
       
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
