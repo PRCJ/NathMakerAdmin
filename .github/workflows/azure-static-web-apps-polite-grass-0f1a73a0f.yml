@@ -44,12 +44,12 @@ jobs:
           # Create distributions directory if it doesn't exist
           mkdir -p ./frontend/build/distributions
           
-          # Find the generated JS file (could be frontend.js, app.js, or project name)
-          JS_FILE=$(find ./frontend/build -name "*.js" -path "*/distributions/*" -o -path "*/js/*" | grep -v ".map" | head -1)
+          # Find the generated JS file - look for actual .js files, not directories
+          JS_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
           
           if [ -z "$JS_FILE" ]; then
             echo "No JS file found, checking all build output:"
-            find ./frontend/build -name "*.js" | head -10
+            find ./frontend/build -name "*.js" -type f | head -10
             exit 1
           fi
           
@@ -72,10 +72,9 @@ jobs:
           </html>
           EOF
           
-          # Copy JS file to distributions if not already there
-          if [[ "$JS_FILE" != *"/distributions/"* ]]; then
-            cp "$JS_FILE" ./frontend/build/distributions/
-          fi
+          # Copy the actual JS file to distributions
+          echo "Copying $JS_FILE to distributions directory"
+          cp "$JS_FILE" ./frontend/build/distributions/
           
           echo "Files ready for deployment:"
           ls -la ./frontend/build/distributions/
