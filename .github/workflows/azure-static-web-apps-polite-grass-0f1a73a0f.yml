@@ -37,13 +37,18 @@ jobs:
       - name: Build Kotlin/JS Frontend
         run: |
           echo "Building frontend for production..."
-          ./gradlew :frontend:build --no-daemon --stacktrace
+          
+          # Clean first to avoid stale artifacts
+          ./gradlew :frontend:clean --no-daemon --info
+          
+          # Build the frontend
+          ./gradlew :frontend:build --no-daemon --info
           
           # Try the standard Kotlin/JS production webpack task
-          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --stacktrace || echo "Webpack task not found, trying alternatives..."
+          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --info || echo "Webpack task not found, trying alternatives..."
           
           # Alternative: try distribution task
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon --stacktrace || echo "Distribution task not found"
+          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info || echo "Distribution task not found"
       
       - name: Locate and Prepare Frontend Assets
         run: |
