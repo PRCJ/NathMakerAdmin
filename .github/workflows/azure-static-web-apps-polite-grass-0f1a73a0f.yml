@@ -51,29 +51,55 @@ jobs:
         run: |
           echo "Building frontend for production..."
           
+          # Clean first to avoid stale artifacts
           ./gradlew :frontend:clean --no-daemon --info
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info || true
-          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --info || true
+          
+          # Build the frontend
+          ./gradlew :frontend:build --no-daemon --info
+          
+          # Try the standard Kotlin/JS production webpack task
+          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --info || echo "Webpack task not found, trying alternatives..."
+          
+          # Alternative: try distribution task
+          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info || echo "Distribution task not found"
       
       - name: Create deployment directory
         run: |
           mkdir -p ./deployment
           
-          # Look for JS files in distributions first
-          MAIN_FILE=$(find ./frontend/build/distributions -name "*.js" -type f | grep -v ".map" | head -1 || true)
+          # Try multiple patterns to find the main file (exclude .jar)
+          MAIN_FILE=""
           
-          # If not found, fall back to kotlin-webpack
+          # Pattern 1: Look for .js files but exclude source maps and jar
+          MAIN_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | grep -v ".jar" | head -1)
+          
+          # Pattern 2: Look for files without extension (exclude .jar)
           if [ -z "$MAIN_FILE" ]; then
-            MAIN_FILE=$(find ./frontend/build/kotlin-webpack -name "*.js" -type f | grep -v ".map" | head -1 || true)
+            MAIN_FILE=$(find ./frontend/build -type f | grep -v ".jar" | grep "frontend" | head -1)
+          fi
+          
+          # Pattern 3: Look for files with 'main' in name (exclude .jar)
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -type f | grep -v ".jar" | grep "main" | head -1)
+          fi
+          
+          # Pattern 4: Look in distributions folder
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build/distributions -type f | grep -v ".jar" | head -1 || true)
           fi
           
           if [ -z "$MAIN_FILE" ]; then
-            echo "No JS bundle found in distributions or kotlin-webpack!"
+            echo "No suitable main file found!"
+            echo "=== All files in build directory ==="
+            find ./frontend/build -type f | head -20
             exit 1
           fi
           
+          echo "Found main file: $MAIN_FILE"
           FILE_NAME=$(basename "$MAIN_FILE")
-          cp "$MAIN_FILE" ./deployment/
+          
+          # Copy main file to deployment
+          cp "$MAIN_FILE" "./deployment/$FILE_NAME"
           JS_NAME="$FILE_NAME"
           
           # Create index.html
