@@ -52,16 +52,23 @@ jobs:
           echo "Building frontend for production..."
           
           ./gradlew :frontend:clean --no-daemon --info
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info
+          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info || true
+          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --info || true
       
       - name: Create deployment directory
         run: |
           mkdir -p ./deployment
           
-          # Find main JS file from distribution output
-          MAIN_FILE=$(find ./frontend/build/distributions -name "*.js" -type f | grep -v ".map" | head -1)
+          # Look for JS files in distributions first
+          MAIN_FILE=$(find ./frontend/build/distributions -name "*.js" -type f | grep -v ".map" | head -1 || true)
+          
+          # If not found, fall back to kotlin-webpack
           if [ -z "$MAIN_FILE" ]; then
-            echo "No JS bundle found in distributions!"
+            MAIN_FILE=$(find ./frontend/build/kotlin-webpack -name "*.js" -type f | grep -v ".map" | head -1 || true)
+          fi
+          
+          if [ -z "$MAIN_FILE" ]; then
+            echo "No JS bundle found in distributions or kotlin-webpack!"
             exit 1
           fi
           
