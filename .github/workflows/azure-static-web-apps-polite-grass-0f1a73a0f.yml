@@ -37,7 +37,15 @@ jobs:
       
       - name: Build Kotlin/JS project
         run: |
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon
+          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
+          
+      - name: Debug build output
+        run: |
+          echo "=== Checking what was actually built ==="
+          find ./frontend/build -name "*.js" -type f | head -10 || echo "No JS files found"
+          find ./frontend/build -type f | grep -E "\.(js|html)$" || echo "No JS or HTML files found"
+          echo "=== Directory structure ==="
+          find ./frontend/build -type d | head -15
       
       - name: Create deployment files
         run: |
