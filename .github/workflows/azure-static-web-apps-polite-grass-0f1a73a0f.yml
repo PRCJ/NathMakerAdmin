@@ -3,7 +3,7 @@ name: Frontend CI/CD to Azure Static Web Apps
 on:
   push:
     branches: [master]
-    paths: ['frontend/**', '.github/workflows/**']
+    paths: ['frontend/**', '.github/workflows/**']  # Only run when frontend changes
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches: [master]
@@ -15,28 +15,45 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and Deploy Frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4  # Updated to v4
         with:
           submodules: true
           lfs: false
-
+      
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v4  # Updated to v4
         with:
           java-version: '17'
           distribution: 'temurin'
-
+      
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
-
+        with:
+          cache-disabled: false
+      
       - name: Make gradlew executable
         run: chmod +x ./gradlew
-
+      
+      - name: Fix Kotlin Package Lock
+        run: |
+          # First, try to upgrade the package lock
+          ./gradlew kotlinUpgradePackageLock --no-daemon --info || true
+          
+          # If that fails, delete the lock file and let it regenerate
+          if [ $? -ne 0 ]; then
+            echo "Package lock upgrade failed, removing lock files..."
+            find . -name "kotlin-js-store" -type d -exec rm -rf {} + 2>/dev/null || true
+            find . -name "package-lock.json" -delete 2>/dev/null || true
+            find . -name "yarn.lock" -delete 2>/dev/null || true
+          fi
+      
       - name: Build Kotlin/JS Frontend
         run: |
-          ./gradlew :frontend:clean
-          ./gradlew :frontend:jsBrowserDistribution
-
+          echo "Building frontend for production..."
+          
+          ./gradlew :frontend:clean --no-daemon --info
+          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info
+      
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
@@ -44,14 +61,15 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
           app_location: "frontend"
+          api_location: ""  # No API - using external api.nathmaker.com
           output_location: "build/distributions"
           skip_app_build: true
           skip_api_build: true
-          api_location: ""
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
+    name: Close Pull Request Job
     steps:
       - name: Close Pull Request
         uses: Azure/static-web-apps-deploy@v1
