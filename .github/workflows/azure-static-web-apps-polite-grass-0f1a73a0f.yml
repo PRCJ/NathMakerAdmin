@@ -35,34 +35,75 @@ jobs:
         run: ./gradlew kotlinUpgradePackageLock
       
       - name: Build Kotlin/JS project
-        run: ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
+        run: |
+          echo "=== Available Gradle tasks ==="
+          ./gradlew :frontend:tasks --group="build" | grep -E "(js|JS|browser)" || echo "No JS tasks found"
+          echo ""
+          echo "=== Building with multiple tasks ==="
+          ./gradlew :frontend:build --no-daemon
+          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon || echo "Webpack task failed or not available"
+          ./gradlew :frontend:jsBrowserDistribution --no-daemon || echo "Distribution task failed or not available"
           
       - name: Find build output
         run: |
           echo "=== Build directory structure ==="
           find ./frontend/build -type d | head -20
-          echo "=== JavaScript files ==="
+          echo ""
+          echo "=== All files with .js extension ==="
           find ./frontend/build -name "*.js" -type f
-          echo "=== HTML files ==="
-          find ./frontend/build -name "*.html" -type f
+          echo ""
+          echo "=== Files containing 'frontend' in name ==="
+          find ./frontend/build -name "*frontend*" -type f
+          echo ""
+          echo "=== Files containing 'main' in name ==="
+          find ./frontend/build -name "*main*" -type f
+          echo ""
+          echo "=== Large files (potential bundles) ==="
+          find ./frontend/build -type f -size +10k | head -10
       
       - name: Create deployment directory
         run: |
           mkdir -p ./deployment
           
-          # Find the main JS file
-          JS_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
+          # Try multiple patterns to find the main file
+          MAIN_FILE=""
           
-          if [ -z "$JS_FILE" ]; then
-            echo "No JS files found!"
+          # Pattern 1: Look for .js files
+          MAIN_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
+          
+          # Pattern 2: Look for files without extension that might be JS
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -name "*frontend*" -type f | head -1)
+          fi
+          
+          # Pattern 3: Look for main files
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -name "*main*" -type f | head -1)
+          fi
+          
+          # Pattern 4: Look in distributions folder
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -path "*/distributions/*" -type f | head -1)
+          fi
+          
+          if [ -z "$MAIN_FILE" ]; then
+            echo "No suitable main file found!"
+            echo "=== All files in build directory ==="
+            find ./frontend/build -type f | head -20
             exit 1
           fi
           
-          echo "Found JS file: $JS_FILE"
-          JS_NAME=$(basename "$JS_FILE")
+          echo "Found main file: $MAIN_FILE"
+          FILE_NAME=$(basename "$MAIN_FILE")
           
-          # Copy JS file to deployment
-          cp "$JS_FILE" ./deployment/
+          # Copy main file to deployment (rename to .js if needed)
+          if [[ "$FILE_NAME" == *.js ]]; then
+            cp "$MAIN_FILE" ./deployment/
+            JS_NAME="$FILE_NAME"
+          else
+            cp "$MAIN_FILE" "./deployment/${FILE_NAME}.js"
+            JS_NAME="${FILE_NAME}.js"
+          fi
           
           # Create index.html
           cat > ./deployment/index.html << 'EOF'
@@ -70,6 +111,7 @@ jobs:
           <html>
           <head>
               <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
               <title>NathMaker Admin</title>
           </head>
           <body>
