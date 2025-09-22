@@ -7,6 +7,7 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches:
       - master
+
 jobs:
   build_and_deploy_job:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
@@ -34,72 +35,55 @@ jobs:
         run: ./gradlew kotlinUpgradePackageLock
       
       - name: Build Kotlin/JS project
-        run: |
-          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
+        run: ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
           
-      - name: Debug build output
+      - name: Find build output
         run: |
-          echo "=== Full directory structure after build ==="
-          find ./frontend/build -type d | sort
-          echo ""
-          echo "=== All JavaScript files ==="
-          find ./frontend/build -name "*.js" -type f | sort
-          echo ""
-          echo "=== Looking for main JS file ==="
-          find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -5
+          echo "=== Build directory structure ==="
+          find ./frontend/build -type d | head -20
+          echo "=== JavaScript files ==="
+          find ./frontend/build -name "*.js" -type f
+          echo "=== HTML files ==="
+          find ./frontend/build -name "*.html" -type f
       
-      - name: Prepare deployment files
+      - name: Create deployment directory
         run: |
-          # Find where the JS files actually are
+          mkdir -p ./deployment
+          
+          # Find the main JS file
           JS_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
           
           if [ -z "$JS_FILE" ]; then
-            echo "ERROR: No JavaScript files found in build output!"
+            echo "No JS files found!"
             exit 1
           fi
           
           echo "Found JS file: $JS_FILE"
-          JS_DIR=$(dirname "$JS_FILE")
-          echo "JS directory: $JS_DIR"
+          JS_NAME=$(basename "$JS_FILE")
           
-          # Create deployment directory
-          mkdir -p ./frontend/deploy
+          # Copy JS file to deployment
+          cp "$JS_FILE" ./deployment/
           
-          # Copy all relevant files to deployment directory
-          echo "Copying files to deployment directory..."
-          find ./frontend/build -name "*.js" -type f | grep -v ".map" | while read file; do
-            cp "$file" ./frontend/deploy/
-          done
+          # Create index.html
+          cat > ./deployment/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="UTF-8">
+              <title>NathMaker Admin</title>
+          </head>
+          <body>
+              <div id="root"></div>
+              <script src="SCRIPT_NAME"></script>
+          </body>
+          </html>
+          EOF
           
-          # Copy any HTML files that exist
-          find ./frontend/build -name "*.html" -type f | while read file; do
-            cp "$file" ./frontend/deploy/
-          done
+          # Replace placeholder with actual script name
+          sed -i "s/SCRIPT_NAME/$JS_NAME/g" ./deployment/index.html
           
-          # Create index.html if it doesn't exist
-          if [ ! -f "./frontend/deploy/index.html" ]; then
-            echo "Creating index.html..."
-            JS_FILENAME=$(basename "$JS_FILE")
-            cat > ./frontend/deploy/index.html << 'EOF'
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NathMaker Admin</title>
-</head>
-<body>
-    <div id="root"></div>
-    <script src="JS_FILENAME_PLACEHOLDER"></script>
-</body>
-</html>
-EOF
-            # Replace placeholder with actual filename
-            sed -i "s/JS_FILENAME_PLACEHOLDER/$JS_FILENAME/g" ./frontend/deploy/index.html
-          fi
-          
-          echo "Deployment directory contents:"
-          ls -la ./frontend/deploy/
+          echo "Deployment files:"
+          ls -la ./deployment/
       
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
@@ -107,7 +91,7 @@ EOF
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "./frontend/deploy"
+          app_location: "./deployment"
           api_location: ""
           output_location: ""
           skip_app_build: true
