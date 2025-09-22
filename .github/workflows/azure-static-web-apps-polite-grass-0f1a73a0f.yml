@@ -39,9 +39,67 @@ jobs:
           
       - name: Debug build output
         run: |
-          echo "=== Checking build output ==="
-          find ./frontend/build -name "*.js" -type f | head -10 || echo "No JS files found"
-          ls -la ./frontend/build/dist/js/productionExecutable/ || echo "Standard path not found"
+          echo "=== Full directory structure after build ==="
+          find ./frontend/build -type d | sort
+          echo ""
+          echo "=== All JavaScript files ==="
+          find ./frontend/build -name "*.js" -type f | sort
+          echo ""
+          echo "=== Looking for main JS file ==="
+          find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -5
+      
+      - name: Prepare deployment files
+        run: |
+          # Find where the JS files actually are
+          JS_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
+          
+          if [ -z "$JS_FILE" ]; then
+            echo "ERROR: No JavaScript files found in build output!"
+            exit 1
+          fi
+          
+          echo "Found JS file: $JS_FILE"
+          JS_DIR=$(dirname "$JS_FILE")
+          echo "JS directory: $JS_DIR"
+          
+          # Create deployment directory
+          mkdir -p ./frontend/deploy
+          
+          # Copy all relevant files to deployment directory
+          echo "Copying files to deployment directory..."
+          find ./frontend/build -name "*.js" -type f | grep -v ".map" | while read file; do
+            cp "$file" ./frontend/deploy/
+          done
+          
+          # Copy any HTML files that exist
+          find ./frontend/build -name "*.html" -type f | while read file; do
+            cp "$file" ./frontend/deploy/
+          done
+          
+          # Create index.html if it doesn't exist
+          if [ ! -f "./frontend/deploy/index.html" ]; then
+            echo "Creating index.html..."
+            JS_FILENAME=$(basename "$JS_FILE")
+            cat > ./frontend/deploy/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NathMaker Admin</title>
+</head>
+<body>
+    <div id="root"></div>
+    <script src="JS_FILENAME_PLACEHOLDER"></script>
+</body>
+</html>
+EOF
+            # Replace placeholder with actual filename
+            sed -i "s/JS_FILENAME_PLACEHOLDER/$JS_FILENAME/g" ./frontend/deploy/index.html
+          fi
+          
+          echo "Deployment directory contents:"
+          ls -la ./frontend/deploy/
       
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
@@ -49,7 +107,7 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "./frontend/build/dist/js/productionExecutable"
+          app_location: "./frontend/deploy"
           api_location: ""
           output_location: ""
           skip_app_build: true
