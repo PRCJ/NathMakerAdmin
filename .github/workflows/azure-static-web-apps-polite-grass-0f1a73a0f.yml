@@ -67,29 +67,16 @@ jobs:
         run: |
           mkdir -p ./deployment
           
-          # Try multiple patterns to find the main file (exclude .jar)
-          MAIN_FILE=""
-          
-          # Pattern 1: Look for .js files but exclude source maps and jar
-          MAIN_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | grep -v ".jar" | head -1)
-          
-          # Pattern 2: Look for files without extension (exclude .jar)
-          if [ -z "$MAIN_FILE" ]; then
-            MAIN_FILE=$(find ./frontend/build -type f | grep -v ".jar" | grep "frontend" | head -1)
-          fi
-          
-          # Pattern 3: Look for files with 'main' in name (exclude .jar)
-          if [ -z "$MAIN_FILE" ]; then
-            MAIN_FILE=$(find ./frontend/build -type f | grep -v ".jar" | grep "main" | head -1)
-          fi
-          
-          # Pattern 4: Look in distributions folder
-          if [ -z "$MAIN_FILE" ]; then
-            MAIN_FILE=$(find ./frontend/build/distributions -type f | grep -v ".jar" | head -1 || true)
-          fi
+          # Find the main JS bundle (exclude .jar, .map, package.json, node_modules)
+          MAIN_FILE=$(find ./frontend/build -name "*.js" -type f \
+            | grep -v ".map" \
+            | grep -v ".jar" \
+            | grep -v "package.json" \
+            | grep -v "node_modules" \
+            | head -1)
           
           if [ -z "$MAIN_FILE" ]; then
-            echo "No suitable main file found!"
+            echo "No suitable JS bundle found!"
             echo "=== All files in build directory ==="
             find ./frontend/build -type f | head -20
             exit 1
@@ -98,7 +85,6 @@ jobs:
           echo "Found main file: $MAIN_FILE"
           FILE_NAME=$(basename "$MAIN_FILE")
           
-          # Copy main file to deployment
           cp "$MAIN_FILE" "./deployment/$FILE_NAME"
           JS_NAME="$FILE_NAME"
           
