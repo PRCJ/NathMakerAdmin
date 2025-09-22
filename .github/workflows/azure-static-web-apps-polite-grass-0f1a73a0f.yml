@@ -32,6 +32,9 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
       
+      - name: Upgrade Kotlin package lock
+        run: ./gradlew kotlinUpgradePackageLock
+      
       - name: Build Kotlin/JS project
         run: |
           ./gradlew :frontend:jsBrowserDistribution --no-daemon
