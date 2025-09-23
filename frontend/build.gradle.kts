@@ -11,11 +11,11 @@ kotlin {
             binaries.executable()
 
             webpackTask {
-                mainOutputFileName = "main.js"
+                mainOutputFileName = "frontend.js"
             }
 
             runTask {
-                outputFileName = "main.js"
+                outputFileName = "frontend.js"
             }
         }
     }
