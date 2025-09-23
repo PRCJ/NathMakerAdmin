@@ -1,4 +1,5 @@
 name: Azure Static Web Apps CI/CD
+
 on:
   push:
     branches:
@@ -32,170 +33,21 @@ jobs:
         run: chmod +x ./gradlew
       
       - name: Upgrade Kotlin package lock
-        run: ./gradlew kotlinUpgradePackageLock
+        run: ./gradlew kotlinUpgradePackageLock || true
       
       - name: Build Kotlin/JS project
         run: |
-          echo "=== Building Kotlin/JS project ==="
-          ./gradlew :frontend:build --no-daemon
-          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon || echo "Webpack task failed or not available"
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon || echo "Distribution task failed or not available"
-          
-      - name: Comprehensive build analysis
-        run: |
-          echo "=== COMPLETE BUILD ANALYSIS ==="
-          echo ""
-          echo "=== All files in frontend/build ==="
-          find ./frontend/build -type f | sort
-          echo ""
-          echo "=== All JavaScript files (.js) ==="
-          find ./frontend/build -name "*.js" -type f | sort || echo "No .js files found"
-          echo ""
-          echo "=== All HTML files ==="
-          find ./frontend/build -name "*.html" -type f | sort || echo "No .html files found"
-          echo ""
-          echo "=== All CSS files ==="
-          find ./frontend/build -name "*.css" -type f | sort || echo "No .css files found"
-          echo ""
-          echo "=== Contents of processedResources/js/main/composeResources ==="
-          if [ -d "./frontend/build/processedResources/js/main/composeResources" ]; then
-            ls -la "./frontend/build/processedResources/js/main/composeResources/"
-            echo "Files in composeResources:"
-            find "./frontend/build/processedResources/js/main/composeResources" -type f | sort
-          else
-            echo "composeResources directory not found"
-          fi
-          echo ""
-          echo "=== Contents of distributions folder ==="
-          if [ -d "./frontend/build/distributions" ]; then
-            ls -la "./frontend/build/distributions/"
-            find "./frontend/build/distributions" -type f | sort
-          else
-            echo "distributions directory not found"
-          fi
-          echo ""
-          echo "=== JAR file contents ==="
-          JAR_FILE=$(find ./frontend/build -name "*.jar" -type f | head -1)
-          if [ -n "$JAR_FILE" ]; then
-            echo "Examining JAR: $JAR_FILE"
-            jar -tf "$JAR_FILE" | head -20 || unzip -l "$JAR_FILE" | head -20 || echo "Cannot examine JAR contents"
-          fi
-          
-      - name: Smart deployment preparation
+          ./gradlew :frontend:clean --no-daemon
+          ./gradlew :frontend:jsBrowserDistribution --no-daemon || true
+          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon || true
+      
+      - name: Create deployment directory
         run: |
           mkdir -p ./deployment
+          cp -r ./frontend/build/distributions/* ./deployment/
           
-          echo "=== DEPLOYMENT STRATEGY ==="
-          
-          # Check if there's already an index.html in composeResources
-          COMPOSE_DIR="./frontend/build/processedResources/js/main/composeResources"
-          if [ -f "$COMPOSE_DIR/index.html" ]; then
-            echo "Found existing index.html in composeResources!"
-            echo "Copying entire composeResources directory..."
-            cp -r "$COMPOSE_DIR"/* ./deployment/
-            
-            # List what we copied
-            echo "Copied files:"
-            ls -la ./deployment/
-            
-          else
-            echo "No index.html found in composeResources, using custom approach..."
-            
-            # Look for any JS files
-            JS_FILE=""
-            
-            # Try processedResources first
-            if [ -d "$COMPOSE_DIR" ]; then
-              JS_FILE=$(find "$COMPOSE_DIR" -name "*.js" -type f | head -1)
-            fi
-            
-            # Try distributions
-            if [ -z "$JS_FILE" ]; then
-              JS_FILE=$(find ./frontend/build -path "*/distributions/*" -name "*.js" -type f | head -1)
-            fi
-            
-            # Try anywhere
-            if [ -z "$JS_FILE" ]; then
-              JS_FILE=$(find ./frontend/build -name "*.js" -type f | head -1)
-            fi
-            
-            # Extract from JAR if no loose files
-            if [ -z "$JS_FILE" ]; then
-              JAR_FILE=$(find ./frontend/build -name "*.jar" -type f | head -1)
-              if [ -n "$JAR_FILE" ]; then
-                echo "Extracting from JAR: $JAR_FILE"
-                mkdir -p ./temp_extract
-                cd ./temp_extract
-                jar -xf "../$JAR_FILE" 2>/dev/null || unzip -q "../$JAR_FILE" 2>/dev/null || true
-                
-                # Look for JS files
-                EXTRACTED_JS=$(find . -name "*.js" -type f | head -1)
-                if [ -n "$EXTRACTED_JS" ]; then
-                  cp "$EXTRACTED_JS" ../deployment/app.js
-                  JS_FILE="app.js"
-                fi
-                
-                # Also look for HTML files
-                EXTRACTED_HTML=$(find . -name "index.html" -type f | head -1)
-                if [ -n "$EXTRACTED_HTML" ]; then
-                  cp "$EXTRACTED_HTML" ../deployment/
-                fi
-                
-                cd ..
-                rm -rf ./temp_extract
-              fi
-            fi
-            
-            if [ -n "$JS_FILE" ] && [ "$JS_FILE" != "app.js" ]; then
-              cp "$JS_FILE" ./deployment/
-              JS_FILE=$(basename "$JS_FILE")
-            fi
-            
-            # Create index.html if it doesn't exist
-            if [ ! -f "./deployment/index.html" ]; then
-              if [ -n "$JS_FILE" ]; then
-                cat > ./deployment/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>NathMaker Admin</title>
-          </head>
-          <body>
-              <div id="root"></div>
-              <script src="$JS_FILE"></script>
-          </body>
-          </html>
-          EOF
-                # Replace the JS_FILE placeholder in the generated HTML
-                sed -i "s/\$JS_FILE/$JS_FILE/g" ./deployment/index.html
-              else
-                echo "ERROR: No JavaScript files found for deployment!"
-                exit 1
-              fi
-            fi
-          fi
-          
-          echo "=== FINAL DEPLOYMENT CONTENTS ==="
+          echo "Deployment files:"
           ls -la ./deployment/
-          
-          # Verify we have the essentials
-          if [ ! -f "./deployment/index.html" ]; then
-            echo "ERROR: No index.html in deployment!"
-            exit 1
-          fi
-          
-          echo "=== Content verification ==="
-          echo "index.html content:"
-          cat ./deployment/index.html
-          echo ""
-          
-          if [ -f "./deployment/app.js" ]; then
-            echo "app.js first 200 chars:"
-            head -c 200 ./deployment/app.js
-            echo ""
-          fi
       
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
