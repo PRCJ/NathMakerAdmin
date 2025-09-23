@@ -67,16 +67,29 @@ jobs:
         run: |
           mkdir -p ./deployment
           
-          # Find the main JS bundle (exclude .jar, .map, package.json, node_modules)
-          MAIN_FILE=$(find ./frontend/build -name "*.js" -type f \
-            | grep -v ".map" \
-            | grep -v ".jar" \
-            | grep -v "package.json" \
-            | grep -v "node_modules" \
-            | head -1)
+          # Try multiple patterns to find the main file (using your original logic)
+          MAIN_FILE=""
+          
+          # Pattern 1: Look for .js files
+          MAIN_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
+          
+          # Pattern 2: Look for files without extension that might be JS
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -name "*frontend*" -type f | head -1)
+          fi
+          
+          # Pattern 3: Look for main files
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -name "*main*" -type f | head -1)
+          fi
+          
+          # Pattern 4: Look in distributions folder
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -path "*/distributions/*" -type f | head -1)
+          fi
           
           if [ -z "$MAIN_FILE" ]; then
-            echo "No suitable JS bundle found!"
+            echo "No suitable main file found!"
             echo "=== All files in build directory ==="
             find ./frontend/build -type f | head -20
             exit 1
@@ -85,11 +98,17 @@ jobs:
           echo "Found main file: $MAIN_FILE"
           FILE_NAME=$(basename "$MAIN_FILE")
           
-          cp "$MAIN_FILE" "./deployment/$FILE_NAME"
-          JS_NAME="$FILE_NAME"
+          # Copy main file to deployment (rename to .js if needed)
+          if [[ "$FILE_NAME" == *.js ]]; then
+            cp "$MAIN_FILE" ./deployment/
+            JS_NAME="$FILE_NAME"
+          else
+            cp "$MAIN_FILE" "./deployment/${FILE_NAME}.js"
+            JS_NAME="${FILE_NAME}.js"
+          fi
           
           # Create index.html
-          cat > ./deployment/index.html << EOF
+          cat > ./deployment/index.html << 'EOF'
           <!DOCTYPE html>
           <html>
           <head>
@@ -99,10 +118,13 @@ jobs:
           </head>
           <body>
               <div id="root"></div>
-              <script src="$JS_NAME"></script>
+              <script src="SCRIPT_NAME"></script>
           </body>
           </html>
           EOF
+          
+          # Replace placeholder with actual script name
+          sed -i "s/SCRIPT_NAME/$JS_NAME/g" ./deployment/index.html
           
           echo "Deployment files:"
           ls -la ./deployment/
@@ -117,7 +139,7 @@ jobs:
           api_location: ""  # No API - using external api.nathmaker.com
           output_location: ""
           skip_app_build: true
-          skip_api_build: true
+          skip_api_build: true  # Important: skip API build
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
