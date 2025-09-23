@@ -35,130 +35,26 @@ jobs:
       - name: Fix package locks
         run: ./gradlew kotlinUpgradePackageLock --no-daemon || true
       
-      - name: Force build JavaScript bundle
+      - name: Build frontend
         run: |
-          # Clean everything first
           ./gradlew :frontend:clean --no-daemon
-          
-          # Try multiple webpack tasks to force JS generation
-          echo "Attempting to build JavaScript bundle..."
-          
-          # Try production webpack (most likely to work)
-          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --info || echo "Production webpack failed"
-          
-          # Try development webpack as fallback
-          ./gradlew :frontend:jsBrowserDevelopmentWebpack --no-daemon --info || echo "Development webpack failed"
-          
-          # Try distribution task
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info || echo "Distribution failed"
-          
-          # Try assemble task
-          ./gradlew :frontend:assemble --no-daemon --info || echo "Assemble failed"
-          
-          echo "Build attempts completed"
+          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
       
-      - name: Find and prepare deployment files
+      - name: Verify build output
         run: |
-          echo "=== Searching for JavaScript files ==="
-          find ./frontend/build -name "*.js" -type f | head -20 || echo "No .js files found"
-          
-          # Create deployment directory
-          mkdir -p ./deployment
-          
-          # Strategy 1: Look for actual compiled JavaScript in common webpack locations
-          JS_FILE=""
-          
-          # Check webpack output directories
-          for dir in "distributions" "js/packages" "compileSync/js/main" "kotlin-webpack"; do
-            if [ -d "./frontend/build/$dir" ]; then
-              JS_FILE=$(find "./frontend/build/$dir" -name "*.js" -type f | grep -v ".map" | head -1)
-              if [ -n "$JS_FILE" ]; then
-                echo "Found JS file in $dir: $JS_FILE"
-                break
-              fi
-            fi
-          done
-          
-          # Strategy 2: If no JS file found, look for the main entry point file (might not have .js extension)
-          if [ -z "$JS_FILE" ]; then
-            echo "No .js file found, looking for main executable file..."
-            # Look for files that might be the main executable
-            JS_FILE=$(find ./frontend/build -type f \( -name "*main*" -o -name "*frontend*" -o -name "*app*" \) ! -path "*/tmp/*" ! -name "*.jar" ! -name "*.json" | head -1)
-          fi
-          
-          if [ -z "$JS_FILE" ]; then
-            echo "ERROR: No suitable main file found!"
-            echo "=== Complete build directory structure ==="
-            find ./frontend/build -type f | head -30
-            
-            # Create a minimal working HTML with error message
-            cat > ./deployment/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <meta charset="UTF-8">
-              <title>NathMaker Admin - Build Error</title>
-          </head>
-          <body>
-              <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
-                  <h1>NathMaker Admin</h1>
-                  <p style="color: red;">Build error: No JavaScript bundle was generated</p>
-                  <p>Please check the build configuration</p>
-              </div>
-          </body>
-          </html>
-          EOF
+          echo "Build output verification:"
+          ls -la ./frontend/build/distributions/
+          if [ -f "./frontend/build/distributions/frontend.js" ]; then
+            echo "✅ frontend.js generated successfully"
           else
-            echo "Using file: $JS_FILE"
-            
-            # Copy the file and ensure it has .js extension
-            FILENAME=$(basename "$JS_FILE")
-            if [[ "$FILENAME" == *.js ]]; then
-              cp "$JS_FILE" "./deployment/$FILENAME"
-              SCRIPT_NAME="$FILENAME"
-            else
-              cp "$JS_FILE" "./deployment/${FILENAME}.js"
-              SCRIPT_NAME="${FILENAME}.js"
-            fi
-            
-            # Create proper index.html
-            cat > ./deployment/index.html << EOF
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>NathMaker Admin</title>
-              <style>
-                  body { margin: 0; font-family: Arial, sans-serif; }
-                  #root { min-height: 100vh; }
-                  .loading { 
-                      display: flex; 
-                      align-items: center; 
-                      justify-content: center; 
-                      height: 100vh; 
-                      font-size: 18px; 
-                      color: #666; 
-                  }
-              </style>
-          </head>
-          <body>
-              <div id="root">
-                  <div class="loading">Loading NathMaker Admin...</div>
-              </div>
-              <script src="$SCRIPT_NAME"></script>
-          </body>
-          </html>
-          EOF
+            echo "❌ frontend.js not found"
+            exit 1
           fi
-          
-          echo "=== Deployment directory contents ==="
-          ls -la ./deployment/
-          
-          # Show what we're actually deploying
-          if [ -f "./deployment/index.html" ]; then
-            echo "=== Generated index.html ==="
-            cat ./deployment/index.html
+          if [ -f "./frontend/build/distributions/index.html" ]; then
+            echo "✅ index.html generated successfully"
+          else
+            echo "❌ index.html not found"
+            exit 1
           fi
       
       - name: Deploy to Azure Static Web Apps
@@ -167,7 +63,7 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "./deployment"
+          app_location: "./frontend/build/distributions"
           api_location: ""
           output_location: ""
           skip_app_build: true
