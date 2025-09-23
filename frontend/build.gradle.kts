@@ -6,18 +6,22 @@ plugins {
 }
 
 kotlin {
-    js {
+    js(IR) {
         browser {
             binaries.executable()
 
             webpackTask {
+                mainOutputFileName = "main.js"
+            }
+
+            runTask {
                 outputFileName = "main.js"
             }
         }
     }
 
     sourceSets {
-        jsMain {
+        val jsMain by getting {
             dependencies {
                 implementation(compose.html.core)
                 implementation(compose.runtime)
@@ -26,4 +30,9 @@ kotlin {
             }
         }
     }
+}
+
+// Ensure main function is available
+tasks.withType<org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrLink>().configureEach {
+    kotlinOptions.main = "call"
 }
