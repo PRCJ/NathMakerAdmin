@@ -36,96 +36,161 @@ jobs:
       
       - name: Build Kotlin/JS project
         run: |
-          echo "=== Available Gradle tasks ==="
-          ./gradlew :frontend:tasks --group="build" | grep -E "(js|JS|browser)" || echo "No JS tasks found"
-          echo ""
-          echo "=== Building with multiple tasks ==="
+          echo "=== Building Kotlin/JS project ==="
           ./gradlew :frontend:build --no-daemon
           ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon || echo "Webpack task failed or not available"
           ./gradlew :frontend:jsBrowserDistribution --no-daemon || echo "Distribution task failed or not available"
           
-      - name: Find build output
+      - name: Find and prepare deployment files
         run: |
-          echo "=== Build directory structure ==="
-          find ./frontend/build -type d | head -20
-          echo ""
-          echo "=== All files with .js extension ==="
-          find ./frontend/build -name "*.js" -type f
-          echo ""
-          echo "=== Files containing 'frontend' in name ==="
-          find ./frontend/build -name "*frontend*" -type f
-          echo ""
-          echo "=== Files containing 'main' in name ==="
-          find ./frontend/build -name "*main*" -type f
-          echo ""
-          echo "=== Large files (potential bundles) ==="
-          find ./frontend/build -type f -size +10k | head -10
-      
-      - name: Create deployment directory
-        run: |
+          echo "=== Build output structure ==="
+          find ./frontend/build -type f | head -30
+          
           mkdir -p ./deployment
           
-          # Try multiple patterns to find the main file
-          MAIN_FILE=""
+          # Find the main JavaScript file using multiple strategies
+          MAIN_JS=""
           
-          # Pattern 1: Look for .js files
-          MAIN_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
-          
-          # Pattern 2: Look for files without extension that might be JS
-          if [ -z "$MAIN_FILE" ]; then
-            MAIN_FILE=$(find ./frontend/build -name "*frontend*" -type f | head -1)
+          # Strategy 1: Look in processedResources (most common for Kotlin/JS)
+          if [ -d "./frontend/build/processedResources/js/main" ]; then
+            echo "Searching in processedResources..."
+            MAIN_JS=$(find ./frontend/build/processedResources/js/main -name "*.js" -type f | head -1)
           fi
           
-          # Pattern 3: Look for main files
-          if [ -z "$MAIN_FILE" ]; then
-            MAIN_FILE=$(find ./frontend/build -name "*main*" -type f | head -1)
+          # Strategy 2: Look in distributions
+          if [ -z "$MAIN_JS" ]; then
+            echo "Searching in distributions..."
+            MAIN_JS=$(find ./frontend/build -path "*/distributions/*" -name "*.js" -type f | head -1)
           fi
           
-          # Pattern 4: Look in distributions folder
-          if [ -z "$MAIN_FILE" ]; then
-            MAIN_FILE=$(find ./frontend/build -path "*/distributions/*" -type f | head -1)
+          # Strategy 3: Extract from JAR (Kotlin/JS compilation artifact)
+          if [ -z "$MAIN_JS" ]; then
+            echo "No loose JS files found, checking JAR files..."
+            JAR_FILE=$(find ./frontend/build -name "*.jar" -type f | head -1)
+            if [ -n "$JAR_FILE" ]; then
+              echo "Found JAR: $JAR_FILE"
+              mkdir -p ./temp_jar_extract
+              cd ./temp_jar_extract
+              if command -v unzip >/dev/null 2>&1; then
+                unzip -q "../$JAR_FILE" 2>/dev/null || true
+              elif command -v jar >/dev/null 2>&1; then
+                jar -xf "../$JAR_FILE" 2>/dev/null || true
+              fi
+              
+              # Find JS file in extracted content
+              EXTRACTED_JS=$(find . -name "*.js" -type f | head -1)
+              if [ -n "$EXTRACTED_JS" ]; then
+                echo "Extracted JS from JAR: $EXTRACTED_JS"
+                cp "$EXTRACTED_JS" ../deployment/app.js
+                MAIN_JS="app.js"
+              fi
+              cd ..
+              rm -rf ./temp_jar_extract
+            fi
           fi
           
-          if [ -z "$MAIN_FILE" ]; then
-            echo "No suitable main file found!"
-            echo "=== All files in build directory ==="
-            find ./frontend/build -type f | head -20
+          # Strategy 4: General search as fallback
+          if [ -z "$MAIN_JS" ]; then
+            echo "Final search for any JS files..."
+            MAIN_JS=$(find ./frontend/build -name "*.js" -type f ! -name "*.map" | head -1)
+          fi
+          
+          if [ -z "$MAIN_JS" ]; then
+            echo "ERROR: No JavaScript files found!"
+            echo "Available files:"
+            find ./frontend/build -type f | grep -E "\.(js|jar)$" || echo "No JS or JAR files found"
             exit 1
           fi
           
-          echo "Found main file: $MAIN_FILE"
-          FILE_NAME=$(basename "$MAIN_FILE")
-          
-          # Copy main file to deployment (rename to .js if needed)
-          if [[ "$FILE_NAME" == *.js ]]; then
-            cp "$MAIN_FILE" ./deployment/
-            JS_NAME="$FILE_NAME"
-          else
-            cp "$MAIN_FILE" "./deployment/${FILE_NAME}.js"
-            JS_NAME="${FILE_NAME}.js"
+          # Copy main JS file if not already copied from JAR extraction
+          if [ "$MAIN_JS" != "app.js" ]; then
+            JS_FILENAME=$(basename "$MAIN_JS")
+            cp "$MAIN_JS" "./deployment/$JS_FILENAME"
+            MAIN_JS="$JS_FILENAME"
           fi
           
-          # Create index.html
+          echo "Main JS file: $MAIN_JS"
+          
+          # Copy all web assets from processedResources
+          if [ -d "./frontend/build/processedResources" ]; then
+            echo "Copying web assets from processedResources..."
+            find ./frontend/build/processedResources -type f \( -name "*.css" -o -name "*.png" -o -name "*.jpg" -o -name "*.svg" -o -name "*.ico" -o -name "*.woff" -o -name "*.woff2" -o -name "*.ttf" -o -name "*.json" \) -exec cp {} ./deployment/ \; 2>/dev/null || true
+          fi
+          
+          # Copy static assets if they exist
+          for assets_dir in "./frontend/build/static" "./frontend/build/assets" "./frontend/build/public"; do
+            if [ -d "$assets_dir" ]; then
+              echo "Copying from $assets_dir..."
+              cp -r "$assets_dir"/* ./deployment/ 2>/dev/null || true
+            fi
+          done
+          
+          # Create optimized index.html
           cat > ./deployment/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>NathMaker Admin</title>
-          </head>
-          <body>
-              <div id="root"></div>
-              <script src="SCRIPT_NAME"></script>
-          </body>
-          </html>
-          EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NathMaker Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+        }
+        #root {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div class="loading">Loading NathMaker Admin...</div>
+    </div>
+    <script>
+        // Error handling for JavaScript loading
+        window.addEventListener('error', function(e) {
+            console.error('Application error:', e.error);
+            document.getElementById('root').innerHTML = '<div class="loading" style="color: #e74c3c;">Failed to load application. Please refresh the page.</div>';
+        });
+    </script>
+    <script src="MAIN_JS_PLACEHOLDER"></script>
+</body>
+</html>
+EOF
           
-          # Replace placeholder with actual script name
-          sed -i "s/SCRIPT_NAME/$JS_NAME/g" ./deployment/index.html
+          # Replace placeholder with actual JS filename
+          sed -i "s/MAIN_JS_PLACEHOLDER/$MAIN_JS/g" ./deployment/index.html
           
-          echo "Deployment files:"
+          echo "=== Deployment directory contents ==="
           ls -la ./deployment/
+          
+          echo "=== Verifying main JS file ==="
+          if [ -f "./deployment/$MAIN_JS" ]; then
+            echo "Main JS file size: $(wc -c < "./deployment/$MAIN_JS") bytes"
+            echo "First 100 characters:"
+            head -c 100 "./deployment/$MAIN_JS"
+            echo ""
+          else
+            echo "ERROR: Main JS file not found!"
+            exit 1
+          fi
       
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
