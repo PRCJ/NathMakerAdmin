@@ -35,42 +35,27 @@ jobs:
       - name: Upgrade Kotlin package lock
         run: ./gradlew kotlinUpgradePackageLock || true
       
-      - name: Build Kotlin/JS project
+      - name: Build Kotlin/JS Frontend
         run: |
-          ./gradlew :frontend:clean --no-daemon
+          echo "Building frontend for production..."
+          
+          # Clean first to avoid stale artifacts
+          ./gradlew :frontend:clean --no-daemon --info
+          
+          # Force the distribution build (ensures index.html + frontend.js are created)
           ./gradlew :frontend:jsBrowserDistribution --no-daemon --info --rerun-tasks --no-build-cache
+          
+          echo "=== Build output (distributions) ==="
+          ls -la ./frontend/build/distributions || echo "No distributions folder"
 
-      
       - name: Create deployment directory
         run: |
           mkdir -p ./deployment
-          
-          # Try to find index.html
-          INDEX_HTML=$(find ./frontend/build -name "index.html" | head -1 || true)
-          if [ -z "$INDEX_HTML" ]; then
-            echo "index.html not found!"
-            find ./frontend/build -type f | head -30
-            exit 1
-          fi
-          cp "$INDEX_HTML" ./deployment/index.html
-          
-          # Copy JS bundle
-          JS_BUNDLE=$(find ./frontend/build/kotlin-webpack -name "frontend.js" | head -1 || true)
-          if [ -z "$JS_BUNDLE" ]; then
-            echo "frontend.js not found!"
-            find ./frontend/build -type f | head -30
-            exit 1
-          fi
-          cp "$JS_BUNDLE" ./deployment/frontend.js
-          
-          # Optional: copy source map if it exists
-          if [ -f "${JS_BUNDLE}.map" ]; then
-            cp "${JS_BUNDLE}.map" ./deployment/
-          fi
+          cp -r ./frontend/build/distributions/* ./deployment/
           
           echo "Deployment files:"
           ls -la ./deployment/
-
+      
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
