@@ -5,7 +5,7 @@ import org.jetbrains.compose.web.dom.*
 import org.jetbrains.compose.web.renderComposable
 
 enum class Screen { Splash, Login, Home }
-
+// test
 fun main() {
     renderComposable(rootElementId = "root") {
         var currentScreen by remember { mutableStateOf(Screen.Splash) }
