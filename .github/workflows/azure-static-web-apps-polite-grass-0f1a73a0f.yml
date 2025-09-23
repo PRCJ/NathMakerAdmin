@@ -38,13 +38,24 @@ jobs:
       - name: Build Kotlin/JS project
         run: |
           ./gradlew :frontend:clean --no-daemon
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon || true
+          ./gradlew :frontend:build --no-daemon
           ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon || true
+          ./gradlew :frontend:jsBrowserDistribution --no-daemon || true
       
       - name: Create deployment directory
         run: |
           mkdir -p ./deployment
-          cp -r ./frontend/build/distributions/* ./deployment/
+          
+          # Copy index.html
+          cp ./frontend/build/processedResources/js/main/index.html ./deployment/index.html
+          
+          # Copy JS bundle
+          cp ./frontend/build/kotlin-webpack/js/productionExecutable/frontend.js ./deployment/frontend.js
+          
+          # Optional: copy source map if it exists
+          if [ -f ./frontend/build/kotlin-webpack/js/productionExecutable/frontend.js.map ]; then
+            cp ./frontend/build/kotlin-webpack/js/productionExecutable/frontend.js.map ./deployment/
+          fi
           
           echo "Deployment files:"
           ls -la ./deployment/
