@@ -1,116 +1,73 @@
-name: Frontend CI/CD to Azure Static Web Apps
+name: Azure Static Web Apps CI/CD
 
 on:
   push:
-    branches: [master]
-    paths: ['frontend/**', '.github/workflows/**']  # Only run when frontend changes
+    branches:
+      - master
   pull_request:
     types: [opened, synchronize, reopened, closed]
-    branches: [master]
-    paths: ['frontend/**']
+    branches:
+      - master
 
 jobs:
   build_and_deploy_job:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
-    name: Build and Deploy Frontend
+    name: Build and Deploy Job
     steps:
-      - uses: actions/checkout@v4  # Updated to v4
+      - uses: actions/checkout@v3
         with:
           submodules: true
           lfs: false
       
       - name: Set up JDK 17
-        uses: actions/setup-java@v4  # Updated to v4
+        uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
       
-      - name: Setup Gradle
+      - name: Set up Gradle
         uses: gradle/gradle-build-action@v2
-        with:
-          cache-disabled: false
       
       - name: Make gradlew executable
         run: chmod +x ./gradlew
       
-      - name: Fix Kotlin Package Lock
-        run: |
-          # First, try to upgrade the package lock
-          ./gradlew kotlinUpgradePackageLock --no-daemon --info || true
-          
-          # If that fails, delete the lock file and let it regenerate
-          if [ $? -ne 0 ]; then
-            echo "Package lock upgrade failed, removing lock files..."
-            find . -name "kotlin-js-store" -type d -exec rm -rf {} + 2>/dev/null || true
-            find . -name "package-lock.json" -delete 2>/dev/null || true
-            find . -name "yarn.lock" -delete 2>/dev/null || true
-          fi
+      - name: Upgrade Kotlin package lock
+        run: ./gradlew kotlinUpgradePackageLock
       
-      - name: Build Kotlin/JS Frontend
+      - name: Build Kotlin/JS project
         run: |
-          echo "Building frontend for production..."
+          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon
           
-          # Clean first to avoid stale artifacts
-          ./gradlew :frontend:clean --no-daemon --info
-          
-          # Build the frontend
-          ./gradlew :frontend:build --no-daemon --info
-          
-          # Try the standard Kotlin/JS production webpack task
-          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --info || echo "Webpack task not found, trying alternatives..."
-          
-          # Alternative: try distribution task
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info || echo "Distribution task not found"
+      - name: Debug build output
+        run: |
+          echo "=== Checking what was actually built ==="
+          find ./frontend/build -name "*.js" -type f | head -10 || echo "No JS files found"
+          find ./frontend/build -type f | grep -E "\.(js|html)$" || echo "No JS or HTML files found"
+          echo "=== Directory structure ==="
+          find ./frontend/build -type d | head -15
       
-      - name: Create deployment directory
+      - name: Create deployment files
         run: |
-          mkdir -p ./deployment
+          # Create distributions directory if it doesn't exist
+          mkdir -p ./frontend/build/distributions
           
-          # Try multiple patterns to find the main file (using your original logic)
-          MAIN_FILE=""
+          # Find the generated JS file - look for actual .js files, not directories
+          JS_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
           
-          # Pattern 1: Look for .js files
-          MAIN_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
-          
-          # Pattern 2: Look for files without extension that might be JS
-          if [ -z "$MAIN_FILE" ]; then
-            MAIN_FILE=$(find ./frontend/build -name "*frontend*" -type f | head -1)
-          fi
-          
-          # Pattern 3: Look for main files
-          if [ -z "$MAIN_FILE" ]; then
-            MAIN_FILE=$(find ./frontend/build -name "*main*" -type f | head -1)
-          fi
-          
-          # Pattern 4: Look in distributions folder
-          if [ -z "$MAIN_FILE" ]; then
-            MAIN_FILE=$(find ./frontend/build -path "*/distributions/*" -type f | head -1)
-          fi
-          
-          if [ -z "$MAIN_FILE" ]; then
-            echo "No suitable main file found!"
-            echo "=== All files in build directory ==="
-            find ./frontend/build -type f | head -20
+          if [ -z "$JS_FILE" ]; then
+            echo "No JS file found, checking all build output:"
+            find ./frontend/build -name "*.js" -type f | head -10
             exit 1
           fi
           
-          echo "Found main file: $MAIN_FILE"
-          FILE_NAME=$(basename "$MAIN_FILE")
+          echo "Using JS file: $JS_FILE"
+          JS_FILENAME=$(basename "$JS_FILE")
           
-          # Copy main file to deployment (rename to .js if needed)
-          if [[ "$FILE_NAME" == *.js ]]; then
-            cp "$MAIN_FILE" ./deployment/
-            JS_NAME="$FILE_NAME"
-          else
-            cp "$MAIN_FILE" "./deployment/${FILE_NAME}.js"
-            JS_NAME="${FILE_NAME}.js"
-          fi
-          
-          # Create index.html
-          cat > ./deployment/index.html << 'EOF'
+          # Create index.html that loads the correct JS file
+          cat > ./frontend/build/distributions/index.html << EOF
           <!DOCTYPE html>
-          <html>
+          <html lang="en">
           <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -118,16 +75,17 @@ jobs:
           </head>
           <body>
               <div id="root"></div>
-              <script src="SCRIPT_NAME"></script>
+              <script src="$JS_FILENAME"></script>
           </body>
           </html>
           EOF
           
-          # Replace placeholder with actual script name
-          sed -i "s/SCRIPT_NAME/$JS_NAME/g" ./deployment/index.html
+          # Copy the actual JS file to distributions
+          echo "Copying $JS_FILE to distributions directory"
+          cp "$JS_FILE" ./frontend/build/distributions/
           
-          echo "Deployment files:"
-          ls -la ./deployment/
+          echo "Files ready for deployment:"
+          ls -la ./frontend/build/distributions/
       
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
@@ -135,11 +93,10 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_GRASS_0F1A73A0F }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "./deployment"
-          api_location: ""  # No API - using external api.nathmaker.com
+          app_location: "./frontend/build/distributions"
+          api_location: ""
           output_location: ""
           skip_app_build: true
-          skip_api_build: true  # Important: skip API build
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
