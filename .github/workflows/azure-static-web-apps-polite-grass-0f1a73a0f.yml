@@ -154,20 +154,22 @@ jobs:
             # Create index.html if it doesn't exist
             if [ ! -f "./deployment/index.html" ]; then
               if [ -n "$JS_FILE" ]; then
-                cat > ./deployment/index.html << EOF
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NathMaker Admin</title>
-</head>
-<body>
-    <div id="root"></div>
-    <script src="$JS_FILE"></script>
-</body>
-</html>
-EOF
+                cat > ./deployment/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>NathMaker Admin</title>
+          </head>
+          <body>
+              <div id="root"></div>
+              <script src="$JS_FILE"></script>
+          </body>
+          </html>
+          EOF
+                # Replace the JS_FILE placeholder in the generated HTML
+                sed -i "s/\$JS_FILE/$JS_FILE/g" ./deployment/index.html
               else
                 echo "ERROR: No JavaScript files found for deployment!"
                 exit 1
