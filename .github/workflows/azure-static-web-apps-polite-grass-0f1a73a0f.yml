@@ -38,9 +38,8 @@ jobs:
       - name: Build Kotlin/JS project
         run: |
           ./gradlew :frontend:clean --no-daemon
-          ./gradlew :frontend:build --no-daemon
-          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon || true
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon || true
+          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info --rerun-tasks --no-build-cache
+
       
       - name: Create deployment directory
         run: |
