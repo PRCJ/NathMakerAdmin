@@ -22,6 +22,11 @@ kotlin {
                 }
             }
 
+            // CRITICAL: Set the webpack output filename to match HTML
+            webpackTask {
+                outputFileName = "frontend.js"
+            }
+
             // Configure distribution directory
             distribution {
                 directory = File("$buildDir/distributions")
@@ -62,7 +67,8 @@ tasks.named("jsBrowserProductionWebpack") {
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
         }
-        #loading {
+        #root { min-height: 100vh; }
+        .loading {
             display: flex;
             justify-content: center;
             align-items: center;
@@ -74,14 +80,14 @@ tasks.named("jsBrowserProductionWebpack") {
 </head>
 <body>
     <div id="root">
-        <div id="loading">Loading NathMaker Admin...</div>
+        <div class="loading">Loading NathMaker Admin...</div>
     </div>
     <script src="frontend.js"></script>
 </body>
 </html>
         """.trimIndent())
 
-        println("✅ Created index.html in distributions directory")
+        println("Created index.html in distributions directory")
     }
 }
 
@@ -106,6 +112,7 @@ tasks.named("jsBrowserDevelopmentWebpack") {
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
         }
+        #root { min-height: 100vh; }
     </style>
 </head>
 <body>
@@ -114,17 +121,6 @@ tasks.named("jsBrowserDevelopmentWebpack") {
 </body>
 </html>
             """.trimIndent())
-        }
-    }
-}
-
-// Ensure distributions directory is created
-tasks.named("build") {
-    doLast {
-        val distributionsDir = File("$buildDir/distributions")
-        if (!distributionsDir.exists()) {
-            distributionsDir.mkdirs()
-            println("Created distributions directory")
         }
     }
 }
