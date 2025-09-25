@@ -1,5 +1,4 @@
 name: Azure Static Web Apps CI/CD
-
 on:
   push:
     branches:
@@ -33,25 +32,97 @@ jobs:
         run: chmod +x ./gradlew
       
       - name: Upgrade Kotlin package lock
-        run: ./gradlew kotlinUpgradePackageLock || true
+        run: ./gradlew kotlinUpgradePackageLock
       
-      - name: Build Kotlin/JS Frontend
+      - name: Build Kotlin/JS project
         run: |
-          echo "Building frontend for production..."
+          echo "=== Available Gradle tasks ==="
+          ./gradlew :frontend:tasks --group="build" | grep -E "(js|JS|browser)" || echo "No JS tasks found"
+          echo ""
+          echo "=== Building with multiple tasks ==="
+          ./gradlew :frontend:build --no-daemon
+          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon || echo "Webpack task failed or not available"
+          ./gradlew :frontend:jsBrowserDistribution --no-daemon || echo "Distribution task failed or not available"
           
-          # Clean first to avoid stale artifacts
-          ./gradlew :frontend:clean --no-daemon --info
-          
-          # Force the distribution build (ensures index.html + frontend.js are created)
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon --info --rerun-tasks --no-build-cache
-          
-          echo "=== Build output (distributions) ==="
-          ls -la ./frontend/build/distributions || echo "No distributions folder"
-
+      - name: Find build output
+        run: |
+          echo "=== Build directory structure ==="
+          find ./frontend/build -type d | head -20
+          echo ""
+          echo "=== All files with .js extension ==="
+          find ./frontend/build -name "*.js" -type f
+          echo ""
+          echo "=== Files containing 'frontend' in name ==="
+          find ./frontend/build -name "*frontend*" -type f
+          echo ""
+          echo "=== Files containing 'main' in name ==="
+          find ./frontend/build -name "*main*" -type f
+          echo ""
+          echo "=== Large files (potential bundles) ==="
+          find ./frontend/build -type f -size +10k | head -10
+      
       - name: Create deployment directory
         run: |
           mkdir -p ./deployment
-          cp -r ./frontend/build/distributions/* ./deployment/
+          
+          # Try multiple patterns to find the main file
+          MAIN_FILE=""
+          
+          # Pattern 1: Look for .js files
+          MAIN_FILE=$(find ./frontend/build -name "*.js" -type f | grep -v ".map" | head -1)
+          
+          # Pattern 2: Look for files without extension that might be JS
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -name "*frontend*" -type f | head -1)
+          fi
+          
+          # Pattern 3: Look for main files
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -name "*main*" -type f | head -1)
+          fi
+          
+          # Pattern 4: Look in distributions folder
+          if [ -z "$MAIN_FILE" ]; then
+            MAIN_FILE=$(find ./frontend/build -path "*/distributions/*" -type f | head -1)
+          fi
+          
+          if [ -z "$MAIN_FILE" ]; then
+            echo "No suitable main file found!"
+            echo "=== All files in build directory ==="
+            find ./frontend/build -type f | head -20
+            exit 1
+          fi
+          
+          echo "Found main file: $MAIN_FILE"
+          FILE_NAME=$(basename "$MAIN_FILE")
+          
+          # Copy main file to deployment (rename to .js if needed)
+          if [[ "$FILE_NAME" == *.js ]]; then
+            cp "$MAIN_FILE" ./deployment/
+            JS_NAME="$FILE_NAME"
+          else
+            cp "$MAIN_FILE" "./deployment/${FILE_NAME}.js"
+            JS_NAME="${FILE_NAME}.js"
+          fi
+          
+          # Create index.html
+          cat > ./deployment/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>NathMaker Admin</title>
+          </head>
+          <body>
+              <div id="root"></div>
+              <script src="SCRIPT_NAME"></script>
+          </body>
+          </html>
+          EOF
+          
+          # Replace placeholder with actual script name
+          sed -i "s/SCRIPT_NAME/$JS_NAME/g" ./deployment/index.html
           
           echo "Deployment files:"
           ls -la ./deployment/
