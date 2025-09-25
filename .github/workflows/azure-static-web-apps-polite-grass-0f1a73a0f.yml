@@ -48,95 +48,37 @@ jobs:
           
           echo "All build attempts completed"
       
-      - name: Create deployment from any available files
+      - name: Create deployment from actual build files
         run: |
           # Create deployment directory
           mkdir -p ./deployment
           
-          # Find ANY executable file that could work
-          echo "=== Searching entire build directory for usable files ==="
-          find ./frontend/build -type f | head -30
+          # Copy the actual generated files from the exact locations where they're built
+          echo "Looking for files in exact build locations..."
           
-          # Look for the main function file (this is what actually gets executed)
-          MAIN_FILE=""
-          
-          # Strategy 1: Find the actual main executable (may not have .js extension)
-          for pattern in "main" "frontend" "app" "*Main*" "*Frontend*"; do
-            MAIN_FILE=$(find ./frontend/build -type f -name "$pattern" ! -path "*/tmp/*" ! -name "*.json" ! -name "*.map" | head -1)
-            if [ -n "$MAIN_FILE" ]; then
-              echo "Found potential main file: $MAIN_FILE"
-              break
-            fi
-          done
-          
-          # Strategy 2: Look in distributions or js directories
-          if [ -z "$MAIN_FILE" ]; then
-            for dir in "distributions" "js" "compileSync"; do
-              if [ -d "./frontend/build/$dir" ]; then
-                MAIN_FILE=$(find "./frontend/build/$dir" -type f ! -name "*.json" ! -name "*.map" | head -1)
-                if [ -n "$MAIN_FILE" ]; then
-                  echo "Found file in $dir: $MAIN_FILE"
-                  break
-                fi
+          # Copy JavaScript file from webpack output
+          if [ -f "./frontend/build/kotlin-webpack/js/productionExecutable/frontend.js" ]; then
+            echo "Found frontend.js in webpack output"
+            cp "./frontend/build/kotlin-webpack/js/productionExecutable/frontend.js" "./deployment/frontend.js"
+          else
+            echo "frontend.js not found in webpack output, checking alternatives..."
+            # Check other possible locations
+            find ./frontend/build -name "frontend.js" -type f | head -1 | while read file; do
+              if [ -n "$file" ]; then
+                echo "Found frontend.js at: $file"
+                cp "$file" "./deployment/frontend.js"
               fi
             done
           fi
           
-          if [ -z "$MAIN_FILE" ]; then
-            echo "ERROR: No executable file found. Creating minimal working deployment."
-            
-            # Create a basic working HTML page
-            cat > ./deployment/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>NathMaker Admin</title>
-              <style>
-                  body { 
-                      margin: 0; 
-                      padding: 50px; 
-                      font-family: Arial, sans-serif; 
-                      text-align: center; 
-                  }
-                  .container { 
-                      max-width: 600px; 
-                      margin: 0 auto; 
-                      padding: 50px; 
-                      border: 1px solid #ddd; 
-                      border-radius: 8px; 
-                  }
-                  .error { color: #e74c3c; margin: 20px 0; }
-                  .info { color: #3498db; margin: 10px 0; }
-              </style>
-          </head>
-          <body>
-              <div class="container">
-                  <h1>NathMaker Admin</h1>
-                  <div class="error">Build Configuration Issue</div>
-                  <div class="info">The Kotlin/JS build is not generating executable JavaScript files.</div>
-                  <div class="info">Please check the build.gradle.kts configuration.</div>
-                  <p><strong>Next Steps:</strong></p>
-                  <ul style="text-align: left; display: inline-block;">
-                      <li>Verify webpack configuration</li>
-                      <li>Check if binaries.executable() is set</li>
-                      <li>Ensure proper browser target configuration</li>
-                  </ul>
-              </div>
-          </body>
-          </html>
-          EOF
-          
+          # Copy HTML file from processed resources
+          if [ -f "./frontend/build/processedResources/js/main/index.html" ]; then
+            echo "Found index.html in processed resources"
+            cp "./frontend/build/processedResources/js/main/index.html" "./deployment/index.html"
           else
-            echo "Using main file: $MAIN_FILE"
-            
-            # Copy the main file
-            FILENAME=$(basename "$MAIN_FILE")
-            cp "$MAIN_FILE" "./deployment/${FILENAME}.js"
-            
-            # Create HTML that loads this file
-            cat > ./deployment/index.html << EOF
+            echo "index.html not found in processed resources, creating basic one..."
+            # Create minimal HTML that loads frontend.js
+            cat > ./deployment/index.html << 'EOF'
           <!DOCTYPE html>
           <html>
           <head>
@@ -146,15 +88,30 @@ jobs:
           </head>
           <body>
               <div id="root"></div>
-              <script src="${FILENAME}.js"></script>
+              <script src="frontend.js"></script>
           </body>
           </html>
           EOF
-          
           fi
           
+          # Verify deployment files exist
           echo "=== Final deployment contents ==="
           ls -la ./deployment/
+          
+          if [ -f "./deployment/frontend.js" ]; then
+            echo "✅ frontend.js ready for deployment"
+            echo "File size: $(du -h ./deployment/frontend.js | cut -f1)"
+          else
+            echo "❌ frontend.js missing - build may have failed"
+            exit 1
+          fi
+          
+          if [ -f "./deployment/index.html" ]; then
+            echo "✅ index.html ready for deployment"
+          else
+            echo "❌ index.html missing"
+            exit 1
+          fi
       
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
