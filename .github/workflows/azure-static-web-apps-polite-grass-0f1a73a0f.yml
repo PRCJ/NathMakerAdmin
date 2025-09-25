@@ -35,18 +35,10 @@ jobs:
       - name: Fix package locks
         run: ./gradlew kotlinUpgradePackageLock --no-daemon || true
       
-      - name: Build with all possible tasks
+      - name: Build frontend
         run: |
           ./gradlew :frontend:clean --no-daemon
-          
-          # Try every possible Kotlin/JS build task
-          ./gradlew :frontend:build --no-daemon || echo "build failed"
-          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon || echo "production webpack failed"  
-          ./gradlew :frontend:jsBrowserDevelopmentWebpack --no-daemon || echo "development webpack failed"
-          ./gradlew :frontend:jsBrowserDistribution --no-daemon || echo "distribution failed"
-          ./gradlew :frontend:assemble --no-daemon || echo "assemble failed"
-          
-          echo "All build attempts completed"
+          ./gradlew :frontend:jsBrowserProductionWebpack --no-daemon --info
       
       - name: Create deployment from actual build files
         run: |
