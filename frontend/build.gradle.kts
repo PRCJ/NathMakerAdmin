@@ -12,7 +12,6 @@ kotlin {
 
             webpackTask {
                 mainOutputFileName = "frontend.js"
-                outputFileName = "frontend.js"
             }
 
             runTask {
