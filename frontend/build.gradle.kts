@@ -69,3 +69,16 @@ tasks.withType<org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrLink>().confi
         moduleKind = "umd"
     }
 }
+
+tasks.register<Copy>("prepareVercelDist") {
+    dependsOn("jsBrowserProductionWebpack")
+
+    from("$buildDir/kotlin-webpack/js/productionExecutable") {
+        include("*.js")
+        include("*.map")
+    }
+    from("$buildDir/processedResources/js/main") {
+        include("index.html")
+    }
+    into("$buildDir/vercel-dist")
+}
