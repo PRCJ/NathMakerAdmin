@@ -16,17 +16,7 @@ import models
 from database import Base, get_engine, get_db
 
 
-# ─── Lifespan: create tables once on first cold start ─────────────────────────
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    try:
-        Base.metadata.create_all(bind=get_engine())
-    except Exception as e:
-        print(f"[startup] DB table creation failed: {e}")
-    yield
-
-
-app = FastAPI(title="NathMaker Admin API", lifespan=lifespan)
+app = FastAPI(title="NathMaker Admin API")
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 frontend_url = os.environ.get("FRONTEND_URL", "https://nath-maker-admin-sigma.vercel.app")
@@ -86,6 +76,15 @@ def health_check():
         return {"status": "ok", "db": "connected"}
     except Exception as e:
         return {"status": "error", "db": str(e)}
+
+
+@app.get("/admin/init-db")
+def init_db():
+    try:
+        Base.metadata.create_all(bind=get_engine())
+        return {"message": "Database tables created successfully"}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # ─── Admin Endpoints ──────────────────────────────────────────────────────────
