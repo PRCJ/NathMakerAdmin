@@ -28,18 +28,16 @@ def get_engine():
     pwd = quote_plus(p.password or "")
     host = p.hostname
     port = p.port or 5432
-    db = p.path  # e.g. /neondb
+    db = p.path or ""
 
-    url = f"postgresql+pg8000://{user}:{pwd}@{host}:{port}{db}"
-
-    # SSL required for Neon
-    ssl_ctx = ssl.create_default_context()
+    url = f"postgresql://{user}:{pwd}@{host}:{port}{db}"
 
     _engine = create_engine(
         url,
-        connect_args={"ssl_context": ssl_ctx},
+        connect_args={"sslmode": "require"},
         poolclass=NullPool,
     )
+
     return _engine
 
 

@@ -3,7 +3,11 @@
   "builds": [
     {
       "src": "api/index.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 10,
+        "runtime": "python3.9"
+      }
     },
     {
       "src": "frontend/build/vercel-dist/**",
