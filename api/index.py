@@ -9,9 +9,13 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 # Create DB tables on startup (equivalent to ddl-auto=update)
-models.Base.metadata.create_all(bind=engine)
+try:
+    models.Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"WARNING: Could not create tables: {e}")
 
 app = FastAPI(title="NathMaker Admin API")
 
@@ -62,6 +66,17 @@ class AdminSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ─── Health Check ─────────────────────────────────────────────────────────────
+@app.get("/admin/health")
+def health_check():
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ok", "db": "connected"}
+    except Exception as e:
+        return {"status": "error", "db": str(e)}
 
 
 # ─── Admin Endpoints ──────────────────────────────────────────────────────────
