@@ -30,7 +30,7 @@ fun HomePage(username: String, password: String) {
                 }
 
                 val response = window.fetch(
-                    "https://api.nathmakers.com/api/catalogue",
+                    "/api/catalogue",
                     RequestInit(method = "GET", headers = headers)
                 ).await()
 
