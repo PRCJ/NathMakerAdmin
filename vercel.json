@@ -4,14 +4,40 @@
     {
       "src": "api/index.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "frontend/build/vercel-dist/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "api/index.py" },
-    { "src": "/admin/(.*)", "dest": "api/index.py" },
-    { "src": "/products(.*)", "dest": "api/index.py" },
-    { "src": "/(.*)", "dest": "/$1" }
-  ],
-  "outputDirectory": "frontend/build/vercel-dist",
-  "buildCommand": "./gradlew :frontend:prepareVercelDist"
+    {
+      "src": "/api/(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/admin(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/products(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/frontend.js",
+      "dest": "/frontend/build/vercel-dist/frontend.js"
+    },
+    {
+      "src": "/(.*\\.js)",
+      "dest": "/frontend/build/vercel-dist/$1"
+    },
+    {
+      "src": "/(.*\\.map)",
+      "dest": "/frontend/build/vercel-dist/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/build/vercel-dist/index.html"
+    }
+  ]
 }

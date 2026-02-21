@@ -5,6 +5,8 @@ build/
 
 ### Ignore everything inside build by default ###
 frontend/build/*
+!frontend/build/vercel-dist/
+!frontend/build/vercel-dist/**
 
 # Allow Kotlin JS lock store for reproducible builds
 !kotlin-js-store/
