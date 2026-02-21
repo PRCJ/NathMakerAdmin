@@ -1,6 +1,10 @@
 import os
+import sys
 from contextlib import asynccontextmanager
 from typing import Optional
+
+# Ensure the 'api' directory is in the Python path so local imports work reliably on Vercel
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
