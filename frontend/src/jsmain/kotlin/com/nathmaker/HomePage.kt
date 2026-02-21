@@ -21,6 +21,7 @@ external fun btoa(input: String): String
 fun HomePage(username: String, password: String) {
     var catalogues by remember { mutableStateOf<List<Catalogue>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         scope.launch {
@@ -43,6 +44,8 @@ fun HomePage(username: String, password: String) {
                 }
             } catch (e: Exception) {
                 error = "Failed to load data: ${e.message}"
+            } finally {
+                isLoading = false
             }
         }
     }
@@ -51,7 +54,8 @@ fun HomePage(username: String, password: String) {
 
     when {
         error != null -> P { Text("❌ $error") }
-        catalogues.isEmpty() -> P { Text("Loading products...") }
+        isLoading -> P { Text("Loading products...") }
+        catalogues.isEmpty() -> P { Text("The catalogue is currently empty. Add products via the admin app!") }
         else -> {
             catalogues.forEach { catalogue ->
                 H2 { Text(catalogue.catalogueName) }
