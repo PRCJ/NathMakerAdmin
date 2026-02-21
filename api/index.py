@@ -1,10 +1,6 @@
 import os
-import sys
 from contextlib import asynccontextmanager
 from typing import Optional
-
-# Ensure the 'api' directory is in the Python path so local imports work reliably on Vercel
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,8 +8,8 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-import models
-from database import Base, get_engine, get_db
+from core import models
+from core.database import Base, get_engine, get_db
 
 
 app = FastAPI(title="NathMaker Admin API")
