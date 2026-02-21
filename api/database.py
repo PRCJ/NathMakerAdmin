@@ -1,45 +1,51 @@
 import os
 import ssl
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote_plus
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import NullPool
 
+Base = declarative_base()
 
-def _build_engine():
-    raw_url = os.environ.get("DATABASE_URL")
-    if not raw_url:
+# Lazy engine — only created on first DB request, not at import time
+_engine = None
+
+
+def get_engine():
+    global _engine
+    if _engine is not None:
+        return _engine
+
+    raw = os.environ.get("DATABASE_URL", "")
+    if not raw:
         raise RuntimeError("DATABASE_URL environment variable is not set")
 
-    # Parse original URL to extract components
-    p = urlparse(raw_url)
+    p = urlparse(raw)
 
-    # Rebuild as pg8000 dialect URL (pure Python, works on Vercel Lambda)
-    pg8000_url = (
-        f"postgresql+pg8000://{p.username}:{p.password}"
-        f"@{p.hostname}:{p.port or 5432}{p.path}"
-    )
+    # URL-encode credentials to handle special characters
+    user = quote_plus(p.username or "")
+    pwd = quote_plus(p.password or "")
+    host = p.hostname
+    port = p.port or 5432
+    db = p.path  # e.g. /neondb
 
-    # SSL context required for Neon
+    url = f"postgresql+pg8000://{user}:{pwd}@{host}:{port}{db}"
+
+    # SSL required for Neon
     ssl_ctx = ssl.create_default_context()
-    ssl_ctx.verify_mode = ssl.CERT_REQUIRED
-    ssl_ctx.check_hostname = True
 
-    return create_engine(
-        pg8000_url,
+    _engine = create_engine(
+        url,
         connect_args={"ssl_context": ssl_ctx},
-        poolclass=NullPool,   # Required for serverless — no persistent connections
+        poolclass=NullPool,
     )
-
-
-engine = _build_engine()
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+    return _engine
 
 
 def get_db():
-    db = SessionLocal()
+    Session = sessionmaker(bind=get_engine())
+    db = Session()
     try:
         yield db
     finally:

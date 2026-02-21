@@ -1,30 +1,35 @@
 import os
+from contextlib import asynccontextmanager
 from typing import Optional
-
-import models
-import database
-from database import engine, get_db
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-# Create DB tables on startup (equivalent to ddl-auto=update)
-try:
-    models.Base.metadata.create_all(bind=engine)
-except Exception as e:
-    print(f"WARNING: Could not create tables: {e}")
+import models
+from database import Base, get_engine, get_db
 
-app = FastAPI(title="NathMaker Admin API")
 
-# ─── CORS ────────────────────────────────────────────────────────────────────
-frontend_url = os.environ.get("FRONTEND_URL", "https://your-app.vercel.app")
+# ─── Lifespan: create tables once on first cold start ─────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        Base.metadata.create_all(bind=get_engine())
+    except Exception as e:
+        print(f"[startup] DB table creation failed: {e}")
+    yield
+
+
+app = FastAPI(title="NathMaker Admin API", lifespan=lifespan)
+
+# ─── CORS ─────────────────────────────────────────────────────────────────────
+frontend_url = os.environ.get("FRONTEND_URL", "https://nath-maker-admin-sigma.vercel.app")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_url, "http://localhost:8081"],
+    allow_origins=[frontend_url, "http://localhost:8081", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -72,7 +77,7 @@ class AdminSchema(BaseModel):
 @app.get("/admin/health")
 def health_check():
     try:
-        with engine.connect() as conn:
+        with get_engine().connect() as conn:
             conn.execute(text("SELECT 1"))
         return {"status": "ok", "db": "connected"}
     except Exception as e:
