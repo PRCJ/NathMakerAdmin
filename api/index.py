@@ -44,6 +44,9 @@ class CatalogueSchema(BaseModel):
 
     class Config:
         from_attributes = True
+        populate_by_name = True
+        alias_generator = lambda string: ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(string.split('_')))
+
 
 
 class ProductSchema(BaseModel):
