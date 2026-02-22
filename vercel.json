@@ -28,6 +28,14 @@
       "dest": "api/index.py"
     },
     {
+      "src": "/docs(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/openapi.json",
+      "dest": "api/index.py"
+    },
+    {
       "src": "/frontend.js",
       "dest": "/frontend/build/vercel-dist/frontend.js"
     },
