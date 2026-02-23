@@ -8,10 +8,6 @@
         "maxDuration": 10,
         "runtime": "python3.9"
       }
-    },
-    {
-      "src": "frontend/build/vercel-dist/**",
-      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -24,10 +20,6 @@
       "dest": "api/index.py"
     },
     {
-      "src": "/products(.*)",
-      "dest": "api/index.py"
-    },
-    {
       "src": "/docs(.*)",
       "dest": "api/index.py"
     },
@@ -36,20 +28,15 @@
       "dest": "api/index.py"
     },
     {
-      "src": "/frontend.js",
-      "dest": "/frontend/build/vercel-dist/frontend.js"
+      "src": "/(.*)",
+      "dest": "/public/$1"
     },
     {
-      "src": "/(.*\\.js)",
-      "dest": "/frontend/build/vercel-dist/$1"
-    },
-    {
-      "src": "/(.*\\.map)",
-      "dest": "/frontend/build/vercel-dist/$1"
+      "handle": "filesystem"
     },
     {
       "src": "/(.*)",
-      "dest": "/frontend/build/vercel-dist/index.html"
+      "dest": "/public/index.html"
     }
   ]
 }
