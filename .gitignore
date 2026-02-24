@@ -53,3 +53,19 @@ env/
 
 ### Environment variables ###
 .env
+
+### Build/debug logs ###
+build_*.txt
+compile_*.txt
+raw_build*.txt
+gradle_*.txt
+*_error*.txt
+*_compile*.txt
+*_webpack*.txt
+info_log.txt
+grep_errors.txt
+verbose_error.txt
+vercel_dev.txt
+clean_compile.txt
+.kotlin/
+local.db

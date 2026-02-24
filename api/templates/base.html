@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NathMaker Admin</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-100 flex h-screen">
+    {% set is_login = is_login | default(false) %}
+    {% if not is_login %}
+    <aside class="w-64 bg-white shadow-md flex flex-col">
+        <div class="h-16 flex items-center justify-center border-b">
+            <h1 class="text-xl font-bold text-gray-800">NathMaker Admin</h1>
+        </div>
+        <nav class="flex-1 px-4 py-4 space-y-2">
+            <a href="/admin/dashboard" class="block px-4 py-2 rounded {% if request.url.path == '/admin/dashboard' %}bg-blue-500 text-white{% else %}hover:bg-gray-200 text-gray-700{% endif %}">Dashboard</a>
+            <a href="/admin/catalogues" class="block px-4 py-2 rounded {% if request.url.path == '/admin/catalogues' %}bg-blue-500 text-white{% else %}hover:bg-gray-200 text-gray-700{% endif %}">Catalogues</a>
+            <a href="/admin/products" class="block px-4 py-2 rounded {% if request.url.path.startswith('/admin/product') %}bg-blue-500 text-white{% else %}hover:bg-gray-200 text-gray-700{% endif %}">Products</a>
+            <a href="/docs" target="_blank" class="block px-4 py-2 rounded hover:bg-gray-200 text-gray-700">Swagger API Docs</a>
+        </nav>
+        <div class="p-4 border-t">
+            <a href="/admin/logout" class="block w-full text-center text-red-600 hover:text-red-800">Logout</a>
+        </div>
+    </aside>
+    {% endif %}
+
+    <main class="flex-1 overflow-y-auto">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

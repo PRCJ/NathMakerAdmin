@@ -1,88 +1,98 @@
 package com.nathmaker
 
 import androidx.compose.runtime.*
-import kotlinx.browser.window
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.await
-import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import org.jetbrains.compose.web.css.*
 import org.jetbrains.compose.web.dom.*
-import org.w3c.fetch.Headers
-import org.w3c.fetch.RequestInit
 
-private val scope = MainScope()
-
-@JsName("btoa")
-external fun btoa(input: String): String
-// test comment
 @Composable
-fun HomePage(username: String, password: String) {
-    var catalogues by remember { mutableStateOf<List<Catalogue>>(emptyList()) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
+fun HomePage(onNavigate: (Screen) -> Unit) {
+    Div({ style { fontFamily("system-ui, -apple-system, sans-serif") } }) {
 
-    LaunchedEffect(Unit) {
-        scope.launch {
-            try {
-                val headers = Headers().apply {
-                    append("Authorization", "Basic " + btoa("$username:$password"))
+        // Hero Section
+        Div({
+            style {
+                position(Position.Relative)
+                height(80.vh)
+                backgroundColor(Color("#fdfbf7"))
+                display(DisplayStyle.Flex)
+                alignItems(AlignItems.Center)
+                justifyContent(JustifyContent.Center)
+                textAlign("center")
+            }
+        }) {
+            Div({
+                style {
+                    maxWidth(600.px)
+                    padding(40.px)
                 }
+            }) {
+                H1({
+                    style {
+                        fontSize(56.px)
+                        color(Color("#2c3e50"))
+                        marginBottom(20.px)
+                        property("letter-spacing", "-1px")
+                        lineHeight("1.1")
+                    }
+                }) { Text("Elegance in Every Detail") }
 
-                val response = window.fetch(
-                    "/api/catalogue",
-                    RequestInit(method = "GET", headers = headers)
-                ).await()
+                P({
+                    style {
+                        fontSize(20.px)
+                        color(Color("#666"))
+                        marginBottom(40.px)
+                        lineHeight("1.6")
+                    }
+                }) { Text("Discover our exclusive collection of handcrafted jewellery, designed to celebrate your unique moments.") }
 
-                if (response.ok) {
-                    val text = response.text().await()
-                    val json = Json { ignoreUnknownKeys = true }
-                    catalogues = json.decodeFromString(text)
-                } else {
-                    error = "Server error: ${response.status}"
+                Button(attrs = {
+                    style {
+                        backgroundColor(Color("#d4af37"))
+                        color(Color("white"))
+                        padding(15.px, 40.px)
+                        border(0.px, LineStyle.None, Color("transparent"))
+                        borderRadius(4.px)
+                        fontSize(16.px)
+                        fontWeight("bold")
+                        cursor("pointer")
+                        property("text-transform", "uppercase")
+                        property("letter-spacing", "${1}px")
+                    }
+                    onClick { onNavigate(Screen.Catalogues) }
+                }) {
+                    Text("Explore Collections")
                 }
-            } catch (e: Exception) {
-                error = "Failed to load data: ${e.message}"
-            } finally {
-                isLoading = false
             }
         }
-    }
 
-    H1 { Text("🏬 NathMaker Catalogue") }
-
-    when {
-        error != null -> P { Text("❌ $error") }
-        isLoading -> P { Text("Loading products...") }
-        catalogues.isEmpty() -> P { Text("The catalogue is currently empty. Add products via the admin app!") }
-        else -> {
-            catalogues.forEach { catalogue ->
-                H2 { Text(catalogue.catalogueName) }
-                Div({
-                    style {
-                        display(DisplayStyle.Grid)
-                        gridTemplateColumns("repeat(auto-fit, minmax(200px, 1fr))")
-                        gap(16.px)
-                    }
-                }) {
-                    catalogue.items.forEach { item ->
-                        Div({
-                            style {
-                                border(1.px, LineStyle.Solid, rgb(220, 220, 220))
-                                borderRadius(10.px)
-                                padding(12.px)
-                                backgroundColor(rgb(250, 250, 255))
-                                textAlign("center")
-                            }
-                        }) {
-                            P { Text(item.code) }
-                            P { Text(item.type) }
-                            P { Text("₹${item.price}") }
-                        }
-                    }
-                }
+        // Tagline Section
+        Div({
+            style {
+                padding(80.px, 20.px)
+                backgroundColor(Color("white"))
+                textAlign("center")
             }
+        }) {
+            H2({
+                style {
+                    fontSize(32.px)
+                    color(Color("#333"))
+                    maxWidth(800.px)
+                    property("margin", "0 auto")
+                    fontWeight("300")
+                    lineHeight("1.5")
+                }
+            }) { Text("\"True beauty is not about being noticed, it's about being remembered.\"") }
+            P({
+                style {
+                    marginTop(20.px)
+                    color(Color("#999"))
+                    property("text-transform", "uppercase")
+                    property("letter-spacing", "${2}px")
+                    fontSize(14.px)
+                }
+            }) { Text("— The NathMaker Promise") }
         }
     }
 }
+

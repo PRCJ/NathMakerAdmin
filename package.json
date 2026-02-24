@@ -2,7 +2,8 @@
     "name": "nathmaker-admin",
     "version": "1.0.0",
     "scripts": {
-        "build": "./gradlew prepareVercelDist && mkdir -p public && cp -r frontend/build/vercel-dist/* public/"
+        "build": "echo 'Frontend pre-built and committed in public/'",
+        "build:local": "./gradlew prepareVercelDist && mkdir -p public && cp -r frontend/build/vercel-dist/* public/"
     },
     "dependencies": {},
     "devDependencies": {}

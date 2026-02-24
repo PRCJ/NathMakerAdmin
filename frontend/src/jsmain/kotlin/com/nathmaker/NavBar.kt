@@ -21,15 +21,31 @@ fun NavBar(onNavigate: (Screen) -> Unit) {
     }) {
         Div({
             style {
-                fontSize(24.px)
-                fontWeight("bold")
-                color(Color("#333"))
+                display(DisplayStyle.Flex)
+                alignItems(AlignItems.Center)
+                gap(10.px)
                 cursor("pointer")
-                property("letter-spacing", "-0.5px")
             }
             onClick { onNavigate(Screen.Home) }
         }) {
-            Text("NATHMAKER")
+            Img(src = "/logo.png", alt = "NathMakers", attrs = {
+                style {
+                    width(40.px)
+                    height(40.px)
+                    property("object-fit", "contain")
+                    borderRadius(6.px)
+                }
+            })
+            Span({
+                style {
+                    fontSize(24.px)
+                    fontWeight("bold")
+                    color(Color("#333"))
+                    property("letter-spacing", "-0.5px")
+                }
+            }) {
+                Text("NATHMAKER")
+            }
         }
 
         Div({

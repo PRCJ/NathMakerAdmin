@@ -1,7 +1,11 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey
+from datetime import datetime, timezone
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean, Text, DateTime
 from sqlalchemy.orm import relationship
 from .database import Base
 
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 
 
 class Admin(Base):
@@ -15,24 +19,26 @@ class Catalogue(Base):
     __tablename__ = "catalogue"
 
     id = Column(Integer, primary_key=True, index=True)
-    catalogue_name = Column(String, nullable=False)
-    items = relationship("Item", back_populates="catalogue", cascade="all, delete-orphan")
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    coverImageUrl = Column(String, nullable=True)
+    createdAt = Column(DateTime, default=_utcnow)
 
-
-class Item(Base):
-    __tablename__ = "item"
-
-    id = Column(Integer, primary_key=True, index=True)
-    code = Column(String, nullable=False)
-    price = Column(Float, nullable=False)
-    type = Column(String, nullable=False)
-    catalogue_id = Column(Integer, ForeignKey("catalogue.id"))
-    catalogue = relationship("Catalogue", back_populates="items")
+    products = relationship("Product", back_populates="catalogue", cascade="all, delete-orphan")
 
 
 class Product(Base):
     __tablename__ = "product"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
+    catalogueId = Column(Integer, ForeignKey("catalogue.id"))
+    productName = Column(String, nullable=False)
+    description = Column(String, nullable=True)
     price = Column(Float, nullable=False)
+    material = Column(String, nullable=True)
+    weight = Column(String, nullable=True)
+    imageUrls = Column(Text, nullable=True)
+    isAvailable = Column(Boolean, default=True)
+    createdAt = Column(DateTime, default=_utcnow)
+
+    catalogue = relationship("Catalogue", back_populates="products")

@@ -24,7 +24,7 @@ fun LoginPage(onLoginSuccess: (String, String) -> Unit) {
         H2 { Text("🔐 Login to NathMaker") }
 
         Input(type = InputType.Text) {
-            placeholder("user")
+            placeholder("Username")
             value(username)
             onInput { username = it.value }
         }
@@ -32,7 +32,7 @@ fun LoginPage(onLoginSuccess: (String, String) -> Unit) {
         Br()
 
         Input(type = InputType.Password) {
-            placeholder("2bde89bf-311b-4f2b-983b-90b8b2ecbae3")
+            placeholder("Password")
             value(password)
             onInput { password = it.value }
         }
@@ -50,3 +50,4 @@ fun LoginPage(onLoginSuccess: (String, String) -> Unit) {
         }
     }
 }
+

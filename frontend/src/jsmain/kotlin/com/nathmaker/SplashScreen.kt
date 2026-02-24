@@ -29,90 +29,46 @@ fun SplashScreen(onFinish: () -> Unit) {
     Style {
         """
         @keyframes glow {
-            0%, 100% { 
-                filter: drop-shadow(0 0 20px rgba(102, 126, 234, 0.6));
-            }
-            50% { 
-                filter: drop-shadow(0 0 30px rgba(102, 126, 234, 0.9));
-            }
+            0%, 100% { filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.5)); }
+            50% { filter: drop-shadow(0 0 30px rgba(212, 175, 55, 0.8)); }
         }
-        
+
         @keyframes logoFloat {
-            0%, 100% { 
-                transform: translateY(0px) scale(1);
-            }
-            50% { 
-                transform: translateY(-5px) scale(1.02);
-            }
+            0%, 100% { transform: translateY(0px) scale(1); }
+            50% { transform: translateY(-5px) scale(1.02); }
         }
-        
+
         @keyframes pulse {
-            0%, 100% { 
-                opacity: 0.6;
-                transform: scale(1);
-            }
-            50% { 
-                opacity: 1;
-                transform: scale(1.1);
-            }
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); }
         }
-        
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        
+
         @keyframes sparkleRotate {
             0% { transform: rotate(0deg) scale(1); opacity: 0.7; }
             50% { transform: rotate(180deg) scale(1.2); opacity: 1; }
             100% { transform: rotate(360deg) scale(1); opacity: 0.7; }
         }
-        
-        @keyframes aurora {
-            0%, 100% { 
-                background-position: 0% 50%;
-                filter: hue-rotate(0deg);
-            }
-            50% { 
-                background-position: 100% 50%;
-                filter: hue-rotate(45deg);
-            }
-        }
-        
-        .brand-glow {
-            animation: glow 2s ease-in-out infinite;
-        }
-        
-        .logo-float {
-            animation: logoFloat 3s ease-in-out infinite;
-        }
-        
-        .pulse-dot {
-            animation: pulse 1.4s ease-in-out infinite;
-        }
-        
-        .sparkle-rotate {
-            animation: sparkleRotate 3s ease-in-out infinite;
-        }
-        
-        .aurora-bg {
-            background: linear-gradient(135deg, #667eea, #764ba2, #f093fb, #f5576c, #4facfe, #00f2fe);
-            background-size: 400% 400%;
-            animation: aurora 8s ease infinite;
-        }
-        
+
+        .brand-glow { animation: glow 2s ease-in-out infinite; }
+        .logo-float { animation: logoFloat 3s ease-in-out infinite; }
+        .pulse-dot { animation: pulse 1.4s ease-in-out infinite; }
+        .sparkle-rotate { animation: sparkleRotate 3s ease-in-out infinite; }
+
         .fade-in-1 {
             animation: fadeIn 0.8s ease-out forwards;
             animation-delay: 0.2s;
             opacity: 0;
         }
-        
         .fade-in-2 {
             animation: fadeIn 0.8s ease-out forwards;
             animation-delay: 0.5s;
             opacity: 0;
         }
-        
         .fade-in-3 {
             animation: fadeIn 0.8s ease-out forwards;
             opacity: 0;
@@ -121,7 +77,6 @@ fun SplashScreen(onFinish: () -> Unit) {
     }
 
     Div({
-        classes("aurora-bg")
         style {
             display(DisplayStyle.Flex)
             flexDirection(FlexDirection.Column)
@@ -134,12 +89,11 @@ fun SplashScreen(onFinish: () -> Unit) {
             padding(0.px)
             position(Position.Relative)
             overflow("hidden")
+            backgroundColor(Color("#c07840"))
         }
     }) {
 
-        // Decorative elements with modern colors
         if (isVisible) {
-            // Dreamy sparkles
             Div({
                 classes("sparkle-rotate")
                 style {
@@ -147,12 +101,10 @@ fun SplashScreen(onFinish: () -> Unit) {
                     top(15.percent)
                     left(20.percent)
                     fontSize(1.8.em)
-                    color(rgba(255, 255, 255, 0.9))
+                    color(rgba(212, 175, 55, 0.7))
                     property("animation-delay", "0s")
                 }
-            }) {
-                Text("✦")
-            }
+            }) { Text("✦") }
 
             Div({
                 classes("sparkle-rotate")
@@ -161,12 +113,10 @@ fun SplashScreen(onFinish: () -> Unit) {
                     top(25.percent)
                     right(25.percent)
                     fontSize(1.5.em)
-                    color(rgba(240, 147, 251, 0.8))
+                    color(rgba(255, 215, 0, 0.6))
                     property("animation-delay", "0.8s")
                 }
-            }) {
-                Text("✧")
-            }
+            }) { Text("✧") }
 
             Div({
                 classes("sparkle-rotate")
@@ -175,49 +125,30 @@ fun SplashScreen(onFinish: () -> Unit) {
                     bottom(30.percent)
                     left(15.percent)
                     fontSize(1.6.em)
-                    color(rgba(79, 172, 254, 0.8))
+                    color(rgba(212, 175, 55, 0.6))
                     property("animation-delay", "1.2s")
                 }
-            }) {
-                Text("✨")
-            }
-
-            // Modern geometric elements
-            Div({
-                style {
-                    position(Position.Absolute)
-                    top(35.percent)
-                    right(15.percent)
-                    fontSize(1.3.em)
-                    color(rgba(245, 87, 108, 0.7))
-                    property("animation", "pulse 2.5s ease-in-out infinite")
-                    property("animation-delay", "1.8s")
-                }
-            }) {
-                Text("◆")
-            }
+            }) { Text("✨") }
         }
 
-        // Main content container
         Div({
             classes("logo-float")
             style {
                 textAlign("center")
                 color(Color.white)
-                backgroundColor(rgba(255, 255, 255, 0.15))
+                backgroundColor(rgba(255, 255, 255, 0.1))
                 borderRadius(24.px)
                 padding(48.px)
-                border(1.px, LineStyle.Solid, rgba(255, 255, 255, 0.25))
-                property("backdrop-filter", "blur(25px)")
-                property("box-shadow", "0 25px 60px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.2)")
+                border(1.px, LineStyle.Solid, rgba(255, 255, 255, 0.15))
+                property("backdrop-filter", "blur(20px)")
+                property("box-shadow", "0 25px 60px rgba(0, 0, 0, 0.2)")
                 maxWidth(420.px)
             }
         }) {
 
-            // Logo - Beautiful jewelry placeholder
             if (isVisible) {
                 Div({
-                    classes("fade-in-1", "logo-float")
+                    classes("fade-in-1", "brand-glow")
                     style {
                         marginBottom(24.px)
                         display(DisplayStyle.Flex)
@@ -225,120 +156,36 @@ fun SplashScreen(onFinish: () -> Unit) {
                         justifyContent(JustifyContent.Center)
                     }
                 }) {
-
-                    // Elegant jewelry-themed logo placeholder
-                    Div({
+                    Img(src = "/logo.png", alt = "NathMakers Logo", attrs = {
                         style {
-                            width(120.px)
-                            height(120.px)
-                            borderRadius(50.percent)
-                            border(2.px, LineStyle.Solid, rgba(255, 255, 255, 0.6))
-                            property("box-shadow", "0 15px 35px rgba(0, 0, 0, 0.2)")
-                            property("filter", "drop-shadow(0 0 20px rgba(255, 255, 255, 0.3))")
-                            background("linear-gradient(135deg, #FFD700 0%, #FFA500 25%, #FF6347 50%, #DC143C 75%, #8B0000 100%)")
-                            display(DisplayStyle.Flex)
-                            alignItems(AlignItems.Center)
-                            justifyContent(JustifyContent.Center)
-                            flexDirection(FlexDirection.Column)
-                            position(Position.Relative)
-                            property("backdrop-filter", "blur(10px)")
+                            width(180.px)
+                            height(180.px)
+                            property("object-fit", "contain")
+                            borderRadius(16.px)
+                            property("filter", "drop-shadow(0 10px 30px rgba(0, 0, 0, 0.3))")
                         }
-                    }) {
-                        // Main jewelry symbol - diamond/gem
-                        Div({
-                            style {
-                                fontSize(3.2.em)
-                                color(rgba(255, 255, 255, 0.95))
-                                marginBottom((-8).px)
-                                property("text-shadow", "0 2px 8px rgba(0, 0, 0, 0.3)")
-                                property("filter", "drop-shadow(0 0 10px rgba(255, 255, 255, 0.5))")
-                            }
-                        }) {
-                            Text("💎")
-                        }
-
-                        // Decorative jewelry elements around the main gem
-                        Div({
-                            style {
-                                fontSize(1.1.em)
-                                color(rgba(255, 215, 0, 0.9))
-                                position(Position.Absolute)
-                                top(15.px)
-                                right(20.px)
-                                property("animation", "sparkleRotate 2s ease-in-out infinite")
-                                property("animation-delay", "0.3s")
-                            }
-                        }) {
-                            Text("✦")
-                        }
-
-                        Div({
-                            style {
-                                fontSize(0.9.em)
-                                color(rgba(255, 255, 255, 0.8))
-                                position(Position.Absolute)
-                                top(22.px)
-                                left(18.px)
-                                property("animation", "sparkleRotate 2.5s ease-in-out infinite")
-                                property("animation-delay", "0.8s")
-                            }
-                        }) {
-                            Text("✧")
-                        }
-
-                        Div({
-                            style {
-                                fontSize(1.3.em)
-                                color(rgba(255, 105, 180, 0.8))
-                                position(Position.Absolute)
-                                bottom(18.px)
-                                right(28.px)
-                                property("animation", "pulse 2s ease-in-out infinite")
-                                property("animation-delay", "1.2s")
-                            }
-                        }) {
-                            Text("♦")
-                        }
-
-                        Div({
-                            style {
-                                fontSize(1.0.em)
-                                color(rgba(255, 255, 255, 0.7))
-                                position(Position.Absolute)
-                                bottom(20.px)
-                                left(25.px)
-                                property("animation", "sparkleRotate 1.8s ease-in-out infinite")
-                                property("animation-delay", "0.5s")
-                            }
-                        }) {
-                            Text("✨")
-                        }
-                    }
+                    })
                 }
             }
 
-            // Brand name
             if (isVisible) {
                 H1({
-                    classes("brand-glow", "fade-in-1")
+                    classes("fade-in-1")
                     style {
                         fontSize(2.8.em)
                         fontWeight("700")
                         margin(0.px)
                         marginBottom(16.px)
-                        background("linear-gradient(135deg, #ffffff 0%, #f0f8ff 50%, #e6e6fa 100%)")
-                        property("-webkit-background-clip", "text")
-                        property("-webkit-text-fill-color", "transparent")
-                        property("background-clip", "text")
-                        letterSpacing(1.px)
+                        color(Color.white)
+                        property("letter-spacing", "1px")
                         lineHeight("1.1")
+                        property("text-shadow", "0 2px 10px rgba(0, 0, 0, 0.3)")
                     }
                 }) {
                     Text("NathMakers")
                 }
             }
 
-            // Tagline
             if (showTagline) {
                 P({
                     classes("fade-in-2")
@@ -348,7 +195,7 @@ fun SplashScreen(onFinish: () -> Unit) {
                         margin(0.px)
                         marginBottom(32.px)
                         color(rgba(255, 255, 255, 0.95))
-                        letterSpacing(0.5.px)
+                        property("letter-spacing", "0.5px")
                         lineHeight("1.4")
                     }
                 }) {
@@ -356,7 +203,6 @@ fun SplashScreen(onFinish: () -> Unit) {
                 }
             }
 
-            // Loading indicator
             if (showLoader) {
                 Div({
                     classes("fade-in-3")
@@ -368,42 +214,20 @@ fun SplashScreen(onFinish: () -> Unit) {
                         marginTop(16.px)
                     }
                 }) {
-                    // Loading dots
-                    Div({
-                        classes("pulse-dot")
-                        style {
-                            width(10.px)
-                            height(10.px)
-                            borderRadius(50.percent)
-                            backgroundColor(rgba(255, 255, 255, 0.9))
-                            property("animation-delay", "0s")
-                        }
-                    })
-
-                    Div({
-                        classes("pulse-dot")
-                        style {
-                            width(10.px)
-                            height(10.px)
-                            borderRadius(50.percent)
-                            backgroundColor(rgba(255, 255, 255, 0.9))
-                            property("animation-delay", "0.3s")
-                        }
-                    })
-
-                    Div({
-                        classes("pulse-dot")
-                        style {
-                            width(10.px)
-                            height(10.px)
-                            borderRadius(50.percent)
-                            backgroundColor(rgba(255, 255, 255, 0.9))
-                            property("animation-delay", "0.6s")
-                        }
-                    })
+                    repeat(3) { i ->
+                        Div({
+                            classes("pulse-dot")
+                            style {
+                                width(10.px)
+                                height(10.px)
+                                borderRadius(50.percent)
+                                backgroundColor(rgba(212, 175, 55, 0.9))
+                                property("animation-delay", "${i * 0.3}s")
+                            }
+                        })
+                    }
                 }
 
-                // Loading text
                 P({
                     style {
                         fontSize(0.95.em)
