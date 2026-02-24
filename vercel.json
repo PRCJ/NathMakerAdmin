@@ -8,6 +8,10 @@
         "maxDuration": 10,
         "runtime": "python3.9"
       }
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -26,6 +30,10 @@
     {
       "src": "/openapi.json",
       "dest": "api/index.py"
+    },
+    {
+      "src": "/(.*\\.(?:js|css|png|jpg|jpeg|gif|ico|svg|map|woff2?))",
+      "dest": "/public/$1"
     },
     {
       "handle": "filesystem"
