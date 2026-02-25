@@ -193,8 +193,21 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Product deleted successfully"}
 
+@api_router.get("/upload-status")
+def upload_status():
+    """Check if Cloudinary is configured."""
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', '')
+    api_key = os.environ.get('CLOUDINARY_API_KEY', '')
+    return {
+        "cloudinary_configured": bool(cloud_name and api_key and cloud_name != 'demo'),
+        "cloud_name": cloud_name if cloud_name else "(not set)"
+    }
+
 @api_router.post("/upload")
 def upload_image(file: UploadFile = File(...)):
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', 'demo')
+    if cloud_name == 'demo' or not cloud_name:
+        raise HTTPException(status_code=500, detail="Cloudinary not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET in Vercel environment variables.")
     try:
         result = cloudinary.uploader.upload(file.file)
         return {"imageUrl": result.get("secure_url")}
