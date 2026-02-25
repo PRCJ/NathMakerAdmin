@@ -99,8 +99,20 @@ class ProductSchema(ProductCreate):
 # ─── API Endpoints ────────────────────────────────────────────────────────────
 api_router = APIRouter(prefix="/api")
 
+_tables_created = False
+
+def ensure_tables():
+    global _tables_created
+    if not _tables_created:
+        try:
+            Base.metadata.create_all(bind=get_engine())
+            _tables_created = True
+        except Exception:
+            pass
+
 @api_router.get("/catalogues", response_model=List[CatalogueSchema])
 def get_all_catalogues(db: Session = Depends(get_db)):
+    ensure_tables()
     return db.query(models.Catalogue).all()
 
 @api_router.post("/catalogues", response_model=CatalogueSchema, status_code=201)
@@ -117,6 +129,7 @@ def create_catalogue(cat: CatalogueCreate, db: Session = Depends(get_db)):
 
 @api_router.get("/products", response_model=List[ProductSchema])
 def get_products(catalogueId: Optional[int] = None, db: Session = Depends(get_db)):
+    ensure_tables()
     query = db.query(models.Product)
     if catalogueId:
         query = query.filter(models.Product.catalogueId == catalogueId)
