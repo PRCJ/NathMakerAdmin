@@ -24,7 +24,10 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app):
-    Base.metadata.create_all(bind=get_engine())
+    try:
+        Base.metadata.create_all(bind=get_engine())
+    except Exception:
+        pass
     yield
 
 app = FastAPI(title="NathMaker API", lifespan=lifespan)

@@ -8,30 +8,17 @@ from sqlalchemy.pool import NullPool, StaticPool
 Base = declarative_base()
 
 _engine = None
+_is_sqlite = False
 
 
 def get_engine():
-    global _engine
+    global _engine, _is_sqlite
     if _engine is not None:
         return _engine
 
     raw = os.environ.get("DATABASE_URL", "")
 
-    if not raw or raw.startswith("sqlite"):
-        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "local.db")
-        url = f"sqlite:///{os.path.abspath(db_path)}"
-        _engine = create_engine(
-            url,
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
-        )
-        # Enable FK support for SQLite
-        @event.listens_for(_engine, "connect")
-        def _set_sqlite_pragma(dbapi_conn, connection_record):
-            cursor = dbapi_conn.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
-    else:
+    if raw and not raw.startswith("sqlite"):
         p = urlparse(raw)
         user = quote_plus(p.username or "")
         pwd = quote_plus(p.password or "")
@@ -46,6 +33,25 @@ def get_engine():
             connect_args={"sslmode": "require"},
             poolclass=NullPool,
         )
+    else:
+        _is_sqlite = True
+        # /tmp is writable on Vercel serverless; fall back to project root locally
+        tmp = "/tmp" if os.path.isdir("/tmp") else os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), ".."
+        )
+        db_path = os.path.join(tmp, "local.db")
+        url = f"sqlite:///{os.path.abspath(db_path)}"
+        _engine = create_engine(
+            url,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+
+        @event.listens_for(_engine, "connect")
+        def _set_sqlite_pragma(dbapi_conn, connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
 
     return _engine
 
