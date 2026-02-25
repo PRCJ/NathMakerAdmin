@@ -242,6 +242,17 @@ def init_db():
     except Exception as e:
         return {"error": str(e)}
 
+@app.get("/admin/reset-db")
+def reset_db():
+    """Drop and recreate all tables. WARNING: Deletes all data!"""
+    try:
+        engine = get_engine()
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        return {"message": "Database reset: all tables dropped and recreated"}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/admin", response_class=RedirectResponse)
 def admin_redirect():
     return RedirectResponse(url="/admin/dashboard")
