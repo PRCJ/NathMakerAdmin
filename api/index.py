@@ -110,28 +110,6 @@ def ensure_tables():
         except Exception:
             pass
 
-@api_router.get("/debug")
-def debug_check():
-    """Diagnostic endpoint — remove after debugging."""
-    import traceback
-    info = {"python": sys.version, "db_url_set": bool(os.environ.get("DATABASE_URL"))}
-    try:
-        engine = get_engine()
-        info["engine"] = str(engine.url)
-        Base.metadata.create_all(bind=engine)
-        info["tables"] = "created"
-        Session = __import__("sqlalchemy.orm", fromlist=["sessionmaker"]).sessionmaker(bind=engine)
-        db = Session()
-        result = db.execute(__import__("sqlalchemy").text("SELECT 1")).fetchone()
-        info["query_test"] = str(result)
-        cats = db.query(models.Catalogue).all()
-        info["catalogues_count"] = len(cats)
-        db.close()
-    except Exception as e:
-        info["error"] = str(e)
-        info["traceback"] = traceback.format_exc()
-    return info
-
 @api_router.get("/catalogues", response_model=List[CatalogueSchema])
 def get_all_catalogues(db: Session = Depends(get_db)):
     ensure_tables()
