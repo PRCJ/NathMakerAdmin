@@ -61,7 +61,7 @@ def test_upload_status_reports_blob_unconfigured(client):
     assert body["configured"] is False
     assert body["gemini_configured"] is False
     assert "watermark_logo" in body
-    assert body["photo_pipeline"] == "studio-then-ai"
+    assert body["photo_pipeline"] == "gemini-or-studio"
 
 
 def test_normalize_image_types():

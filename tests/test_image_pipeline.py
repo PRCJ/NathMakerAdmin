@@ -21,9 +21,9 @@ def test_upload_status_reports_gemini_and_watermark(client):
     body = client.get("/api/upload-status").json()
     assert body["gemini_configured"] is False
     assert body["watermark_logo"] is True
-    assert body["photo_pipeline"] == "studio-then-ai"
+    assert body["photo_pipeline"] == "gemini-or-studio"
     assert "gemini_quota" in body
-    assert body["horde_enabled"] is False
+    assert "horde_enabled" not in body
 
 
 def test_enhance_requires_auth(client):
@@ -70,6 +70,21 @@ def test_apply_logo_watermark_reviews_size():
     assert any("balanced" in note for note in review["notes"])
 
 
+def test_studio_remake_keeps_gold_pixels():
+    from core.studio_remake import studio_remake
+
+    image = Image.new("RGB", (200, 200), (18, 18, 18))
+    for x in range(80, 120):
+        for y in range(80, 120):
+            image.putpixel((x, y), (210, 170, 60))
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=95)
+    remade = Image.open(io.BytesIO(studio_remake(buf.getvalue())))
+    pixel = remade.getpixel((remade.width // 2, remade.height // 2))
+    assert pixel[0] > 150
+    assert pixel[1] > 110
+
+
 def test_studio_remake_is_never_the_original():
     import io
 
@@ -91,7 +106,7 @@ def test_prepare_photo_never_keeps_raw_bytes():
     assert prepared["enhanced"] is False
     assert prepared["data"] != original
     assert prepared["data"][:2] == b"\xff\xd8"
-    assert any("studio remake" in note.lower() for note in prepared["notes"])
+    assert any("studio wrap" in note.lower() or "studio remake" in note.lower() for note in prepared["notes"])
 
 
 def test_prepare_photo_skips_gemini_after_quota(monkeypatch):
@@ -108,7 +123,7 @@ def test_prepare_photo_skips_gemini_after_quota(monkeypatch):
     assert prepared["enhanced"] is False
     assert prepared["watermark"]["ok"] is True
     assert prepared["data"][:2] == b"\xff\xd8"
-    assert any("studio remake" in note.lower() or "horde" in note.lower() or "quota" in note.lower() for note in prepared["notes"])
+    assert any("quota" in note.lower() or "studio wrap" in note.lower() for note in prepared["notes"])
 
 
 def test_retry_after_billing_quota_is_long():

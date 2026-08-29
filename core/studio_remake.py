@@ -3,100 +3,57 @@ import io
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
 
-def _white_balance(image: Image.Image) -> Image.Image:
-    pixels = list(image.getdata())
-    count = max(len(pixels), 1)
-    avg = [sum(p[i] for p in pixels) / count for i in range(3)]
-    target = (avg[0] + avg[1] + avg[2]) / 3.0 or 1.0
-    scale = [target / (channel or 1.0) for channel in avg]
-    balanced = [
-        (
-            min(255, max(0, int(p[0] * scale[0]))),
-            min(255, max(0, int(p[1] * scale[1]))),
-            min(255, max(0, int(p[2] * scale[2]))),
-        )
-        for p in pixels
-    ]
-    out = Image.new("RGB", image.size)
-    out.putdata(balanced)
-    return out
+def _is_dark_backdrop(red: int, green: int, blue: int) -> bool:
+    luma = 0.299 * red + 0.587 * green + 0.114 * blue
+    sat = max(red, green, blue) - min(red, green, blue)
+    return luma < 52 and sat < 28
 
 
-def _corner_background(image: Image.Image):
-    width, height = image.size
-    samples = [
-        image.getpixel((2, 2)),
-        image.getpixel((width - 3, 2)),
-        image.getpixel((2, height - 3)),
-        image.getpixel((width - 3, height - 3)),
-    ]
-    avg = tuple(int(sum(sample[i] for sample in samples) / 4) for i in range(3))
-    spread = max(
-        max(abs(sample[i] - avg[i]) for sample in samples)
-        for i in range(3)
-    )
-    return avg, spread
-
-
-def _cutout_on_studio(image: Image.Image, bg, tolerance: int) -> Image.Image:
+def _replace_dark_backdrop(image: Image.Image, cream=(245, 240, 232)) -> Image.Image:
+    """Swap near-black cloth/velvet for cream. Leave jewellery RGB untouched."""
     width, height = image.size
     src = image.load()
-    rgba = Image.new("RGBA", image.size)
-    dest = rgba.load()
-    br, bgc, bb = bg
+    out = image.copy()
+    dest = out.load()
+    hits = 0
+    total = width * height
     for y in range(height):
         for x in range(width):
-            red, green, blue = src[x, y]
-            dist = abs(red - br) + abs(green - bgc) + abs(blue - bb)
-            if dist < tolerance:
-                dest[x, y] = (red, green, blue, 0)
-            else:
-                alpha = min(255, (dist - tolerance) * 6)
-                dest[x, y] = (red, green, blue, alpha)
-    return rgba.filter(ImageFilter.SMOOTH)
+            pixel = src[x, y]
+            if _is_dark_backdrop(*pixel[:3]):
+                dest[x, y] = cream
+                hits += 1
+    if hits < total * 0.12:
+        return image
+    return out.filter(ImageFilter.SMOOTH)
 
 
 def studio_remake(image_bytes: bytes) -> bytes:
-    """Always return a new studio catalogue JPEG. Never the original bytes."""
+    """Catalogue presentation wrap. Does not redraw or morph the jewellery."""
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     image = ImageOps.exif_transpose(image)
     longest = max(image.size)
-    if longest > 1400:
-        scale = 1400 / longest
+    if longest > 1600:
+        scale = 1600 / longest
         image = image.resize(
             (max(1, int(image.width * scale)), max(1, int(image.height * scale))),
             Image.Resampling.LANCZOS,
         )
-    image = _white_balance(image)
-    image = ImageEnhance.Contrast(image).enhance(1.16)
-    image = ImageEnhance.Color(image).enhance(1.08)
-    image = ImageEnhance.Sharpness(image).enhance(1.28)
 
-    bg, spread = _corner_background(image)
-    subject = image.convert("RGBA")
-    if spread < 28:
-        subject = _cutout_on_studio(image, bg, tolerance=max(36, spread + 18))
+    image = _replace_dark_backdrop(image)
+    image = ImageEnhance.Contrast(image).enhance(1.06)
+    image = ImageEnhance.Sharpness(image).enhance(1.08)
 
-    side = max(subject.size)
-    pad = max(24, int(side * 0.08))
+    side = max(image.size)
+    pad = max(20, int(side * 0.06))
     canvas_size = side + pad * 2
     canvas = Image.new("RGB", (canvas_size, canvas_size), (245, 240, 232))
     draw = ImageDraw.Draw(canvas)
-    draw.rectangle((0, 0, canvas_size, canvas_size // 2), fill=(250, 246, 240))
-    shadow = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
-    sdraw = ImageDraw.Draw(shadow)
-    ox = (canvas_size - subject.width) // 2
-    oy = (canvas_size - subject.height) // 2
-    sdraw.ellipse(
-        (ox + 12, oy + subject.height - 18, ox + subject.width - 12, oy + subject.height + 22),
-        fill=(40, 28, 18, 45),
-    )
-    shadow = shadow.filter(ImageFilter.GaussianBlur(10))
-    canvas = Image.alpha_composite(canvas.convert("RGBA"), shadow)
-    canvas.paste(subject, (ox, oy), subject)
-    finished = canvas.convert("RGB")
-    finished = ImageEnhance.Brightness(finished).enhance(1.03)
+    draw.rectangle((0, 0, canvas_size, int(canvas_size * 0.42)), fill=(250, 246, 240))
+    ox = (canvas_size - image.width) // 2
+    oy = (canvas_size - image.height) // 2
+    canvas.paste(image, (ox, oy))
 
     buf = io.BytesIO()
-    finished.save(buf, format="JPEG", quality=90, optimize=True)
+    canvas.convert("RGB").save(buf, format="JPEG", quality=92, optimize=True)
     return buf.getvalue()
