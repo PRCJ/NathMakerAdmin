@@ -92,6 +92,27 @@ def test_isolate_jewellery_clears_background():
     assert gold[1] > 110
 
 
+def test_handheld_earrings_cutout_if_present():
+    import os
+
+    from core.studio_remake import studio_remake
+
+    path = "/mnt/c/Users/Admin/Documents/Downloads/images (2).jfif"
+    if not os.path.isfile(path):
+        return
+    remade = Image.open(io.BytesIO(studio_remake(open(path, "rb").read())))
+    corner = remade.getpixel((5, 5))
+    assert corner[0] > 220 and corner[1] > 220 and corner[2] > 220
+    arr = remade.load()
+    goldish = 0
+    for y in range(0, remade.height, 4):
+        for x in range(0, remade.width, 4):
+            pixel = arr[x, y]
+            if pixel[0] > 150 and pixel[1] > 90 and pixel[0] > pixel[2]:
+                goldish += 1
+    assert goldish > 20
+
+
 def test_studio_remake_keeps_gold_pixels():
     from core.studio_remake import studio_remake
 

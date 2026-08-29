@@ -154,11 +154,30 @@
             '</div>' +
             '<textarea class="w-full border p-2 rounded js-desc" rows="2" placeholder="Description">' + (product.description || "") + '</textarea>' +
             '<label class="text-sm flex items-center gap-2"><input type="checkbox" class="js-avail"> Show on shop</label>' +
+            '<div class="flex items-center gap-2">' +
             '<button type="button" class="js-save bg-gray-800 text-white text-sm px-4 py-2 rounded">Save details</button>' +
+            '<button type="button" class="js-delete bg-red-600 text-white text-sm px-4 py-2 rounded">Delete product</button>' +
             '<span class="js-msg text-sm text-green-700 ml-2"></span>' +
+            '</div>' +
             '</div></div>';
         cards.prepend(wrap);
         wrap.querySelector(".js-save").addEventListener("click", function () { saveCard(wrap, product); });
+        wrap.querySelector(".js-delete").addEventListener("click", function () { deleteCard(wrap, product); });
+    }
+
+    async function deleteCard(wrap, product) {
+        if (!confirm("Delete this product permanently?")) return;
+        var response = await fetch("/api/products/" + product.id, {
+            method: "DELETE",
+            credentials: "same-origin"
+        });
+        if (response.ok || response.status === 404) {
+            wrap.remove();
+            return;
+        }
+        var result = await response.json().catch(function () { return {}; });
+        var msg = wrap.querySelector(".js-msg");
+        if (msg) msg.innerText = errorText(result);
     }
 
     async function saveCard(wrap, product) {

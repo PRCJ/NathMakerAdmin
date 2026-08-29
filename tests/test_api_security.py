@@ -165,6 +165,34 @@ def test_login_then_create_and_read_product(auth_client):
     assert detail.json()["price"] == 2500
 
 
+def test_login_then_delete_product(auth_client):
+    cat = auth_client.post("/api/catalogues", json={"name": "Bridal"}).json()
+    created = auth_client.post(
+        "/api/products",
+        json={"catalogueId": cat["id"], "productName": "Temp Nath", "price": 100},
+    )
+    product_id = created.json()["id"]
+    removed = auth_client.delete(f"/api/products/{product_id}")
+    assert removed.status_code == 200
+    assert auth_client.get(f"/api/products/{product_id}").status_code == 404
+
+
+def test_admin_form_delete_product(auth_client):
+    cat = auth_client.post("/api/catalogues", json={"name": "Bridal"}).json()
+    created = auth_client.post(
+        "/api/products",
+        json={"catalogueId": cat["id"], "productName": "Temp Nath", "price": 100},
+    )
+    product_id = created.json()["id"]
+    deleted = auth_client.post(
+        f"/admin/product/delete/{product_id}",
+        follow_redirects=False,
+    )
+    assert deleted.status_code == 302
+    assert "/admin/products" in deleted.headers.get("location", "")
+    assert auth_client.get(f"/api/products/{product_id}").status_code == 404
+
+
 def test_login_rate_limited(client):
     for _ in range(5):
         response = client.post(
