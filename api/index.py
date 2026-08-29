@@ -414,6 +414,15 @@ def admin_products(request: Request, db: Session = Depends(get_db)):
         "catalogues": catalogues
     })
 
+@app.get("/admin/products/bulk", response_class=HTMLResponse)
+def admin_products_bulk(request: Request, db: Session = Depends(get_db)):
+    enforce_admin(request)
+    catalogues = db.query(models.Catalogue).all()
+    return templates.TemplateResponse("products_bulk.html", {
+        "request": request,
+        "catalogues": catalogues
+    })
+
 @app.get("/admin/product/add", response_class=HTMLResponse)
 def admin_product_add_form(request: Request, db: Session = Depends(get_db)):
     enforce_admin(request)

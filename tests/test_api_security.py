@@ -90,6 +90,12 @@ def test_init_db_removed(client):
     assert "tables created" not in response.text
 
 
+def test_bulk_page_requires_login(client):
+    response = client.get("/admin/products/bulk", follow_redirects=False)
+    assert response.status_code == 302
+    assert "/admin/login" in response.headers.get("location", "")
+
+
 def test_docs_disabled(client):
     assert client.get("/docs").status_code == 404
     assert client.get("/openapi.json").status_code == 404
