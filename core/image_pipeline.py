@@ -1,9 +1,16 @@
 import io
 
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageOps
 
 from core.blob_store import MAX_IMAGE_BYTES
-from core.gemini_enhance import enhance_jewellery_photo, gemini_configured
+
+from core.gemini_enhance import (
+    GeminiQuotaExceeded,
+    enhance_jewellery_photo,
+    gemini_configured,
+    quota_blocked,
+    quota_status,
+)
 from core.watermark import apply_logo_watermark
 
 
@@ -36,6 +43,20 @@ def resolve_photo_flags(enhance, watermark):
     return bool(enhance), bool(watermark)
 
 
+def local_studio_polish(image_bytes: bytes) -> bytes:
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image = ImageOps.exif_transpose(image)
+    image = ImageEnhance.Contrast(image).enhance(1.12)
+    image = ImageEnhance.Color(image).enhance(1.06)
+    image = ImageEnhance.Sharpness(image).enhance(1.18)
+    side = max(image.size)
+    canvas = Image.new("RGB", (side, side), (245, 240, 232))
+    canvas.paste(image, ((side - image.width) // 2, (side - image.height) // 2))
+    buf = io.BytesIO()
+    canvas.save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
 def prepare_product_photo(data: bytes, mime: str, enhance: bool, watermark: bool):
     notes = []
     enhanced = False
@@ -44,11 +65,33 @@ def prepare_product_photo(data: bytes, mime: str, enhance: bool, watermark: bool
 
     if enhance:
         if not gemini_configured():
-            raise RuntimeError("GEMINI_API_KEY is not set in Vercel.")
-        data = enhance_jewellery_photo(data, out_mime)
-        out_mime = "image/jpeg"
-        enhanced = True
-        notes.append("Gemini applied a studio catalogue look.")
+            notes.append("GEMINI_API_KEY is not set; applied a local studio crop instead.")
+            data = local_studio_polish(data)
+            out_mime = "image/jpeg"
+        elif quota_blocked():
+            wait = quota_status()["retry_after_seconds"]
+            notes.append(
+                f"Gemini quota is cooling down ({wait}s). Saved a local studio crop instead."
+            )
+            data = local_studio_polish(data)
+            out_mime = "image/jpeg"
+        else:
+            try:
+                data = enhance_jewellery_photo(data, out_mime)
+                out_mime = "image/jpeg"
+                enhanced = True
+                notes.append("Gemini applied a studio catalogue look.")
+            except GeminiQuotaExceeded as exc:
+                notes.append(str(exc) + " Applied a local studio crop so the product still uploads.")
+                data = local_studio_polish(data)
+                out_mime = "image/jpeg"
+            except Exception as exc:
+                notes.append(
+                    "Gemini could not enhance this photo; applied a local studio crop. "
+                    + str(exc)[:160]
+                )
+                data = local_studio_polish(data)
+                out_mime = "image/jpeg"
 
     if watermark:
         data, review = apply_logo_watermark(data, out_mime)

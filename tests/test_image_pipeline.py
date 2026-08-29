@@ -21,7 +21,8 @@ def test_upload_status_reports_gemini_and_watermark(client):
     body = client.get("/api/upload-status").json()
     assert body["gemini_configured"] is False
     assert body["watermark_logo"] is True
-    assert body["photo_pipeline"] == "gemini-default-on"
+    assert body["photo_pipeline"] == "quota-fallback"
+    assert "gemini_quota" in body
 
 
 def test_enhance_requires_auth(client):
@@ -68,15 +69,39 @@ def test_apply_logo_watermark_reviews_size():
     assert any("balanced" in note for note in review["notes"])
 
 
-def test_prepare_photo_requires_gemini_key():
+def test_prepare_photo_falls_back_without_gemini_key():
     from core.image_pipeline import prepare_product_photo
 
+    prepared = prepare_product_photo(_jpeg_bytes(640, 480), "image/jpeg", enhance=True, watermark=False)
+    assert prepared["enhanced"] is False
+    assert prepared["data"][:2] == b"\xff\xd8"
+    assert any("GEMINI_API_KEY" in note for note in prepared["notes"])
+
+
+def test_prepare_photo_skips_gemini_after_quota(monkeypatch):
+    from core import gemini_enhance
+    from core.image_pipeline import prepare_product_photo
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    gemini_enhance.reset_quota_cooldown()
+    gemini_enhance.mark_quota_cooldown(120, "test 429")
     try:
-        prepare_product_photo(_jpeg_bytes(), "image/jpeg", enhance=True, watermark=False)
-    except RuntimeError as exc:
-        assert "GEMINI_API_KEY" in str(exc)
-    else:
-        raise AssertionError("expected missing Gemini key to fail")
+        prepared = prepare_product_photo(_jpeg_bytes(), "image/jpeg", enhance=True, watermark=True)
+    finally:
+        gemini_enhance.reset_quota_cooldown()
+    assert prepared["enhanced"] is False
+    assert prepared["watermark"]["ok"] is True
+    assert any("quota" in note.lower() for note in prepared["notes"])
+
+
+def test_retry_after_billing_quota_is_long():
+    from core.gemini_enhance import _retry_after_seconds
+
+    class Fake:
+        headers = {}
+        text = 'You exceeded your current quota, please check your plan and billing details.'
+
+    assert _retry_after_seconds(Fake()) >= 3600
 
 
 def test_resolve_photo_flags_defaults_off_without_key():

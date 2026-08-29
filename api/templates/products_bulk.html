@@ -42,8 +42,9 @@
                 <span class="ml-2 font-medium">Add NathMakers watermark</span>
             </label>
             <p id="enhanceHint" class="text-sm text-amber-800 mt-2 hidden">
-                GEMINI_API_KEY is not set on the server. Photos will upload as-is; the watermark still applies.
+                GEMINI_API_KEY is not set on the server. Photos still upload with a local studio crop and watermark.
             </p>
+            <p class="text-xs text-indigo-900 mt-2">Flash text is free; Flash <strong>image</strong> has a small daily/minute quota. If quota is hit, products still save.</p>
         </div>
         <p class="text-sm text-gray-500 mb-4">Up to 25 files at once. Each file is uploaded separately so large batches stay under the server limit. Gemini can take up to a minute per photo. New products stay <strong>hidden on the shop</strong> until you mark them available.</p>
         <button type="button" id="startBtn"
@@ -214,7 +215,7 @@
         if (!created.ok) {
             throw new Error(file.name + ": " + errorText(product));
         }
-        return product;
+        return { product: product, notes: upBody.notes || [] };
     }
 
     if (startBtn) {
@@ -232,17 +233,26 @@
             startBtn.disabled = true;
             var ok = 0;
             var failed = [];
+            var warnings = [];
             for (var i = 0; i < files.length; i++) {
                 showStatus("Uploading " + (i + 1) + " of " + files.length + ": " + files[i].name);
                 try {
-                    var product = await uploadOne(files[i], catalogueId);
-                    addCard(product);
+                    var uploaded = await uploadOne(files[i], catalogueId);
+                    addCard(uploaded.product);
                     ok += 1;
+                    if (uploaded.notes && uploaded.notes.length) {
+                        warnings.push(files[i].name + ": " + uploaded.notes.join(" "));
+                    }
                 } catch (err) {
                     failed.push(err.message || String(err));
                 }
             }
-            showStatus("Created " + ok + " product(s)." + (failed.length ? " Failed: " + failed.join(" | ") : " Fill in details on each card, then Save."));
+            showStatus(
+                "Created " + ok + " product(s)." +
+                (failed.length ? " Failed: " + failed.join(" | ") : "") +
+                (warnings.length ? " Notes: " + warnings.join(" | ") : "") +
+                (ok && !failed.length ? " Fill in details on each card, then Save." : "")
+            );
             fileInput.value = "";
             startBtn.disabled = false;
         });
