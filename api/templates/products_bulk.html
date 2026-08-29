@@ -35,7 +35,7 @@
             <p class="font-semibold text-indigo-950 mb-2">Studio look (Gemini)</p>
             <label class="flex items-center cursor-pointer text-sm text-indigo-950 mb-2">
                 <input type="checkbox" id="enhanceToggle" class="w-5 h-5 text-indigo-600 border-gray-300 rounded" checked>
-                <span class="ml-2 font-medium">Improve each photo with Gemini (studio lighting, clean background)</span>
+                <span class="ml-2 font-medium">Improve with Gemini, then free AI Horde if Gemini is out of quota</span>
             </label>
             <label class="flex items-center cursor-pointer text-sm text-indigo-950">
                 <input type="checkbox" id="watermarkToggle" class="w-5 h-5 text-indigo-600 border-gray-300 rounded" checked>
@@ -44,7 +44,7 @@
             <p id="enhanceHint" class="text-sm text-amber-800 mt-2 hidden">
                 GEMINI_API_KEY is not set on the server. Photos still upload with a local studio crop and watermark.
             </p>
-            <p class="text-xs text-indigo-900 mt-2">Flash text is free; Flash <strong>image</strong> has a small daily/minute quota. If quota is hit, products still save.</p>
+            <p class="text-xs text-indigo-900 mt-2">Originals are never stored. Gemini first, then free AI Horde img2img, then a local studio remake.</p>
         </div>
         <p class="text-sm text-gray-500 mb-4">Up to 25 files at once. Each file is uploaded separately so large batches stay under the server limit. Gemini can take up to a minute per photo. New products stay <strong>hidden on the shop</strong> until you mark them available.</p>
         <button type="button" id="startBtn"

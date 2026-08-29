@@ -21,8 +21,9 @@ def test_upload_status_reports_gemini_and_watermark(client):
     body = client.get("/api/upload-status").json()
     assert body["gemini_configured"] is False
     assert body["watermark_logo"] is True
-    assert body["photo_pipeline"] == "quota-fallback"
+    assert body["photo_pipeline"] == "studio-then-ai"
     assert "gemini_quota" in body
+    assert body["horde_enabled"] is False
 
 
 def test_enhance_requires_auth(client):
@@ -69,13 +70,28 @@ def test_apply_logo_watermark_reviews_size():
     assert any("balanced" in note for note in review["notes"])
 
 
-def test_prepare_photo_falls_back_without_gemini_key():
+def test_studio_remake_is_never_the_original():
+    import io
+
+    from core.studio_remake import studio_remake
+
+    original = _jpeg_bytes(640, 400, (30, 30, 30))
+    remade = studio_remake(original)
+    assert remade != original
+    assert remade[:2] == b"\xff\xd8"
+    image = Image.open(io.BytesIO(remade))
+    assert image.width == image.height
+
+
+def test_prepare_photo_never_keeps_raw_bytes():
     from core.image_pipeline import prepare_product_photo
 
-    prepared = prepare_product_photo(_jpeg_bytes(640, 480), "image/jpeg", enhance=True, watermark=False)
+    original = _jpeg_bytes(640, 480, (20, 20, 20))
+    prepared = prepare_product_photo(original, "image/jpeg", enhance=True, watermark=False)
     assert prepared["enhanced"] is False
+    assert prepared["data"] != original
     assert prepared["data"][:2] == b"\xff\xd8"
-    assert any("GEMINI_API_KEY" in note for note in prepared["notes"])
+    assert any("studio remake" in note.lower() for note in prepared["notes"])
 
 
 def test_prepare_photo_skips_gemini_after_quota(monkeypatch):
@@ -91,7 +107,8 @@ def test_prepare_photo_skips_gemini_after_quota(monkeypatch):
         gemini_enhance.reset_quota_cooldown()
     assert prepared["enhanced"] is False
     assert prepared["watermark"]["ok"] is True
-    assert any("quota" in note.lower() for note in prepared["notes"])
+    assert prepared["data"][:2] == b"\xff\xd8"
+    assert any("studio remake" in note.lower() or "horde" in note.lower() or "quota" in note.lower() for note in prepared["notes"])
 
 
 def test_retry_after_billing_quota_is_long():
@@ -104,11 +121,11 @@ def test_retry_after_billing_quota_is_long():
     assert _retry_after_seconds(Fake()) >= 3600
 
 
-def test_resolve_photo_flags_defaults_off_without_key():
+def test_resolve_photo_flags_default_to_fixing():
     from core.image_pipeline import resolve_photo_flags
 
     enhance, watermark = resolve_photo_flags(None, None)
-    assert enhance is False
+    assert enhance is True
     assert watermark is True
     assert resolve_photo_flags(False, False) == (False, False)
 

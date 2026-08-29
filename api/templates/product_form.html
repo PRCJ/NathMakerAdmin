@@ -81,7 +81,7 @@
             <label class="flex items-center cursor-pointer mb-2">
                 <input type="checkbox" id="enhanceToggle"
                     class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" checked>
-                <span class="ml-2 text-indigo-950 font-medium">Improve photo with Gemini (studio lighting, clean background)</span>
+                <span class="ml-2 text-indigo-950 font-medium">Improve with Gemini, then free AI Horde if Gemini is out of quota</span>
             </label>
             <label class="flex items-center cursor-pointer">
                 <input type="checkbox" id="watermarkToggle"
@@ -91,7 +91,7 @@
             <p id="enhanceHint" class="text-sm text-amber-800 mt-2 hidden">
                 GEMINI_API_KEY is not set on the server. Photos still upload with a local studio crop and watermark.
             </p>
-            <p class="text-xs text-indigo-900 mt-2">If Gemini hits a free-tier quota, the product is still created. Image models are not unlimited even on Flash.</p>
+            <p class="text-xs text-indigo-900 mt-2">The original file is never stored. We always save a studio version, then try Gemini / AI Horde.</p>
             <p id="enhanceNotes" class="text-sm text-indigo-900 mt-2 hidden"></p>
         </div>
 
