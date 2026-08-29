@@ -70,19 +70,37 @@ def test_apply_logo_watermark_reviews_size():
     assert any("balanced" in note for note in review["notes"])
 
 
-def test_studio_remake_keeps_gold_pixels():
-    from core.studio_remake import studio_remake
-
-    image = Image.new("RGB", (200, 200), (18, 18, 18))
-    for x in range(80, 120):
-        for y in range(80, 120):
+def _gold_on_black():
+    image = Image.new("RGB", (240, 240), (16, 16, 16))
+    for x in range(90, 150):
+        for y in range(90, 150):
             image.putpixel((x, y), (210, 170, 60))
     buf = io.BytesIO()
     image.save(buf, format="JPEG", quality=95)
-    remade = Image.open(io.BytesIO(studio_remake(buf.getvalue())))
+    return buf.getvalue()
+
+
+def test_isolate_jewellery_clears_background():
+    from core.studio_remake import isolate_jewellery
+
+    isolated = isolate_jewellery(Image.open(io.BytesIO(_gold_on_black())))
+    assert isolated.mode == "RGBA"
+    assert isolated.getpixel((4, 4))[3] < 40
+    assert isolated.getpixel((isolated.width // 2, isolated.height // 2))[3] > 200
+    gold = isolated.getpixel((isolated.width // 2, isolated.height // 2))
+    assert gold[0] > 150
+    assert gold[1] > 110
+
+
+def test_studio_remake_keeps_gold_pixels():
+    from core.studio_remake import studio_remake
+
+    remade = Image.open(io.BytesIO(studio_remake(_gold_on_black())))
     pixel = remade.getpixel((remade.width // 2, remade.height // 2))
     assert pixel[0] > 150
     assert pixel[1] > 110
+    corner = remade.getpixel((6, 6))
+    assert corner[0] > 230 and corner[1] > 230 and corner[2] > 230
 
 
 def test_studio_remake_is_never_the_original():
@@ -106,7 +124,7 @@ def test_prepare_photo_never_keeps_raw_bytes():
     assert prepared["enhanced"] is False
     assert prepared["data"] != original
     assert prepared["data"][:2] == b"\xff\xd8"
-    assert any("studio wrap" in note.lower() or "studio remake" in note.lower() for note in prepared["notes"])
+    assert any("white" in note.lower() or "studio" in note.lower() or "cut" in note.lower() for note in prepared["notes"])
 
 
 def test_prepare_photo_skips_gemini_after_quota(monkeypatch):
@@ -123,7 +141,7 @@ def test_prepare_photo_skips_gemini_after_quota(monkeypatch):
     assert prepared["enhanced"] is False
     assert prepared["watermark"]["ok"] is True
     assert prepared["data"][:2] == b"\xff\xd8"
-    assert any("quota" in note.lower() or "studio wrap" in note.lower() for note in prepared["notes"])
+    assert any("quota" in note.lower() or "white" in note.lower() or "cut" in note.lower() for note in prepared["notes"])
 
 
 def test_retry_after_billing_quota_is_long():

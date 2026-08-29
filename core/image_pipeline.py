@@ -45,12 +45,12 @@ def resolve_photo_flags(enhance, watermark):
 
 def _try_gemini(data: bytes, mime: str, notes: list):
     if not gemini_configured():
-        notes.append("Gemini is not configured. Stored a studio wrap of the same jewellery.")
+        notes.append("Gemini is not configured. Cut the jewellery onto a white background.")
         return studio_remake(data), False
     if quota_blocked():
         wait = quota_status()["retry_after_seconds"]
         notes.append(
-            f"Gemini quota cooling down ({wait}s). Stored a studio wrap of the same jewellery."
+            f"Gemini quota cooling down ({wait}s). Cut the jewellery onto a white background."
         )
         return studio_remake(data), False
     try:
@@ -58,11 +58,11 @@ def _try_gemini(data: bytes, mime: str, notes: list):
         notes.append("Gemini applied a studio catalogue look.")
         return improved, True
     except GeminiQuotaExceeded as exc:
-        notes.append(str(exc) + " Stored a studio wrap of the same jewellery.")
+        notes.append(str(exc) + " Cut the jewellery onto a white background.")
         return studio_remake(data), False
     except Exception as exc:
         notes.append(
-            "Gemini skipped: " + str(exc)[:140] + " Stored a studio wrap of the same jewellery."
+            "Gemini skipped: " + str(exc)[:140] + " Cut the jewellery onto a white background."
         )
         return studio_remake(data), False
 
@@ -76,7 +76,7 @@ def prepare_product_photo(data: bytes, mime: str, enhance: bool, watermark: bool
         remade, enhanced = _try_gemini(data, mime or "image/jpeg", notes)
     else:
         remade = studio_remake(data)
-        notes.append("AI enhance was off. Stored a studio wrap, not the raw file.")
+        notes.append("AI enhance was off. Cut the jewellery onto a white background.")
 
     if not enhanced and enhance:
         # Gemini path already remakes on failure; keep a note if empty.
