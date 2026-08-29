@@ -16,11 +16,15 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-import cloudinary
-import cloudinary.uploader
-
 from core import models
 from core.database import Base, get_engine, get_db
+from core.blob_store import (
+    ALLOWED_IMAGE_TYPES,
+    MAX_IMAGE_BYTES,
+    blob_configured,
+    blob_status,
+    upload_image_bytes,
+)
 
 from contextlib import asynccontextmanager
 
@@ -91,12 +95,6 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 templates.env.globals["docs_enabled"] = _ENABLE_DOCS
-
-cloudinary.config(
-    cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME', 'demo'),
-    api_key=os.environ.get('CLOUDINARY_API_KEY', 'default_key'),
-    api_secret=os.environ.get('CLOUDINARY_API_SECRET', 'default_secret')
-)
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -295,22 +293,29 @@ def delete_product(
 
 @api_router.get("/upload-status")
 def upload_status():
-    """Check if Cloudinary is configured."""
-    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', '')
-    api_key = os.environ.get('CLOUDINARY_API_KEY', '')
-    return {
-        "cloudinary_configured": bool(cloud_name and api_key and cloud_name != 'demo'),
-        "cloud_name": cloud_name if cloud_name else "(not set)"
-    }
+    return blob_status()
 
 @api_router.post("/upload")
 def upload_image(file: UploadFile = File(...), _: None = Depends(require_admin)):
-    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', 'demo')
-    if cloud_name == 'demo' or not cloud_name:
-        raise HTTPException(status_code=500, detail="Cloudinary not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET in Vercel environment variables.")
+    if not blob_configured():
+        raise HTTPException(
+            status_code=500,
+            detail="Vercel Blob is not configured. Create a public Blob store in the Vercel project Storage tab.",
+        )
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPEG, PNG, WebP, and GIF images are allowed.",
+        )
+    data = file.file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    if len(data) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="Image is too large (max 4 MB).")
     try:
-        result = cloudinary.uploader.upload(file.file)
-        return {"imageUrl": result.get("secure_url")}
+        image_url = upload_image_bytes(data, file.filename or "image.jpg", content_type)
+        return {"imageUrl": image_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

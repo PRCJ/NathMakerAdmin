@@ -53,6 +53,23 @@ def test_upload_requires_auth(client):
     assert response.status_code == 401
 
 
+def test_upload_status_reports_blob_unconfigured(client):
+    response = client.get("/api/upload-status")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["storage"] == "vercel_blob"
+    assert body["configured"] is False
+
+
+def test_upload_without_blob_config(auth_client):
+    response = auth_client.post(
+        "/api/upload",
+        files={"file": ("x.png", b"xxxx", "image/png")},
+    )
+    assert response.status_code == 500
+    assert "Vercel Blob is not configured" in response.json()["detail"]
+
+
 def test_reset_db_removed(client):
     response = client.get("/admin/reset-db")
     assert response.status_code == 404
