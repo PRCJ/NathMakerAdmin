@@ -8,7 +8,9 @@ from typing import Optional, List
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, File, Form, APIRouter
+import httpx
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, UploadFile, File, Form, APIRouter
+from urllib.parse import urlparse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -19,6 +21,9 @@ from sqlalchemy.orm import Session
 from core import models
 from core.database import Base, get_engine, get_db
 from core.excel_import import parse_spreadsheet, build_template_xlsx
+from core.gemini_enhance import gemini_configured
+from core.image_pipeline import prepare_product_photo
+from core.watermark import logo_path
 from core.blob_store import (
     ALLOWED_IMAGE_TYPES,
     MAX_IMAGE_BYTES,
@@ -168,6 +173,11 @@ class ProductSchema(ProductCreate):
     createdAt: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
+class EnhanceImageRequest(BaseModel):
+    imageUrl: str
+    enhance: bool = True
+    watermark: bool = True
+
 
 # ─── API Endpoints ────────────────────────────────────────────────────────────
 api_router = APIRouter(prefix="/api")
@@ -295,10 +305,48 @@ def delete_product(
 
 @api_router.get("/upload-status")
 def upload_status():
-    return blob_status()
+    status = blob_status()
+    status["gemini_configured"] = gemini_configured()
+    status["watermark_logo"] = bool(logo_path())
+    return status
+
+@api_router.post("/images/enhance")
+def enhance_image(body: EnhanceImageRequest, _: None = Depends(require_admin)):
+    if body.enhance and not gemini_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="GEMINI_API_KEY is not set. Add it in Vercel to enhance photos.",
+        )
+    parsed = urlparse(body.imageUrl or "")
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise HTTPException(status_code=400, detail="imageUrl must be an http(s) URL.")
+    try:
+        source = httpx.get(body.imageUrl, timeout=20.0, follow_redirects=True)
+        source.raise_for_status()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not download the original image.")
+    mime = source.headers.get("content-type", "image/jpeg").split(";")[0]
+    try:
+        prepared = prepare_product_photo(source.content, mime, body.enhance, body.watermark)
+        url = upload_image_bytes(prepared["data"], "enhanced.jpg", prepared["mime"])
+        return {
+            "imageUrl": url,
+            "enhanced": prepared["enhanced"],
+            "watermark": prepared["watermark"],
+            "notes": prepared["notes"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/upload")
-def upload_image(file: UploadFile = File(...), _: None = Depends(require_admin)):
+def upload_image(
+    file: UploadFile = File(...),
+    enhance: bool = Query(False),
+    watermark: bool = Query(False),
+    _: None = Depends(require_admin),
+):
     if not blob_configured():
         raise HTTPException(
             status_code=500,
@@ -316,8 +364,18 @@ def upload_image(file: UploadFile = File(...), _: None = Depends(require_admin))
     if len(data) > MAX_IMAGE_BYTES:
         raise HTTPException(status_code=400, detail="Image is too large (max 4 MB).")
     try:
-        image_url = upload_image_bytes(data, file.filename or "image.jpg", content_type)
-        return {"imageUrl": image_url}
+        prepared = prepare_product_photo(data, content_type, enhance, watermark)
+        image_url = upload_image_bytes(
+            prepared["data"],
+            file.filename or "image.jpg",
+            prepared["mime"],
+        )
+        return {
+            "imageUrl": image_url,
+            "enhanced": prepared["enhanced"],
+            "watermark": prepared["watermark"],
+            "notes": prepared["notes"],
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

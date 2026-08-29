@@ -93,6 +93,23 @@
             </div>
         </div>
 
+        <div class="mb-6 space-y-2">
+            <label class="flex items-center cursor-pointer">
+                <input type="checkbox" id="enhanceToggle"
+                    class="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500" checked>
+                <span class="ml-2 text-gray-700">Improve photo with Gemini (studio lighting, clean background)</span>
+            </label>
+            <label class="flex items-center cursor-pointer">
+                <input type="checkbox" id="watermarkToggle"
+                    class="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500" checked>
+                <span class="ml-2 text-gray-700">Add NathMakers watermark</span>
+            </label>
+            <p id="enhanceHint" class="text-sm text-amber-700 hidden">
+                GEMINI_API_KEY is not set on the server. Photos will upload as-is; the watermark still applies.
+            </p>
+            <p id="enhanceNotes" class="text-sm text-gray-600 hidden"></p>
+        </div>
+
         <div id="imagePreviewContainer" class="grid grid-cols-4 gap-4 mb-8">
             <!-- JavaScript will render images here -->
         </div>
@@ -113,6 +130,42 @@
     const imageUrlsInput = document.getElementById('imageUrlsInput');
     const imagePreviewContainer = document.getElementById('imagePreviewContainer');
     const dropzone = document.getElementById('dropzone');
+    const enhanceToggle = document.getElementById('enhanceToggle');
+    const watermarkToggle = document.getElementById('watermarkToggle');
+    const enhanceHint = document.getElementById('enhanceHint');
+    const enhanceNotes = document.getElementById('enhanceNotes');
+
+    fetch("/api/upload-status", { credentials: "same-origin" })
+        .then(function (res) { return res.json(); })
+        .then(function (status) {
+            if (enhanceHint && status && status.gemini_configured === false) {
+                enhanceHint.classList.remove("hidden");
+            }
+        })
+        .catch(function () { /* ignore */ });
+
+    function uploadQuery() {
+        var parts = [];
+        if (enhanceToggle && enhanceToggle.checked) parts.push("enhance=1");
+        if (watermarkToggle && watermarkToggle.checked) parts.push("watermark=1");
+        return parts.length ? "?" + parts.join("&") : "";
+    }
+
+    function showNotes(result) {
+        if (!enhanceNotes) return;
+        var lines = [];
+        if (result && result.enhanced) lines.push("Gemini studio look applied.");
+        if (result && Array.isArray(result.notes)) lines = lines.concat(result.notes);
+        if (result && result.watermark && Array.isArray(result.watermark.notes)) {
+            lines = lines.concat(result.watermark.notes);
+        }
+        if (!lines.length) {
+            enhanceNotes.classList.add("hidden");
+            return;
+        }
+        enhanceNotes.classList.remove("hidden");
+        enhanceNotes.innerText = lines.join(" ");
+    }
 
     let currentImages = [];
     try {
@@ -163,13 +216,16 @@
 
         uploadStatus.classList.remove("hidden");
         uploadStatus.innerText = "Uploading " + files.length + " file(s)...";
+        if (enhanceToggle && enhanceToggle.checked) {
+            uploadStatus.innerText = "Improving and uploading " + files.length + " photo(s). Gemini can take up to a minute each.";
+        }
 
         for (var i = 0; i < files.length; i++) {
             var formData = new FormData();
             formData.append("file", files[i]);
 
             try {
-                var response = await fetch("/api/upload", {
+                var response = await fetch("/api/upload" + uploadQuery(), {
                     method: "POST",
                     body: formData,
                     credentials: "same-origin"
@@ -183,6 +239,7 @@
                 if (response.ok && result.imageUrl) {
                     currentImages.push(result.imageUrl);
                     renderPreviews();
+                    showNotes(result);
                 } else {
                     alert("Upload error: " + errorText(result));
                 }

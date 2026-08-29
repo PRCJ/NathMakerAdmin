@@ -59,6 +59,8 @@ def test_upload_status_reports_blob_unconfigured(client):
     body = response.json()
     assert body["storage"] == "vercel_blob"
     assert body["configured"] is False
+    assert body["gemini_configured"] is False
+    assert "watermark_logo" in body
 
 
 def test_normalize_image_types():

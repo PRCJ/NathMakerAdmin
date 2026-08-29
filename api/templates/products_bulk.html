@@ -31,7 +31,20 @@
                     class="w-full border p-2 rounded bg-gray-50">
             </div>
         </div>
-        <p class="text-sm text-gray-500 mb-4">Up to 25 files at once. Each file is uploaded separately so large batches stay under the server limit. New products stay <strong>hidden on the shop</strong> until you mark them available.</p>
+        <div class="mb-4 space-y-2">
+            <label class="flex items-center cursor-pointer text-sm text-gray-700">
+                <input type="checkbox" id="enhanceToggle" class="w-4 h-4 text-blue-600 border-gray-300 rounded" checked>
+                <span class="ml-2">Improve each photo with Gemini (studio lighting, clean background)</span>
+            </label>
+            <label class="flex items-center cursor-pointer text-sm text-gray-700">
+                <input type="checkbox" id="watermarkToggle" class="w-4 h-4 text-blue-600 border-gray-300 rounded" checked>
+                <span class="ml-2">Add NathMakers watermark</span>
+            </label>
+            <p id="enhanceHint" class="text-sm text-amber-700 hidden">
+                GEMINI_API_KEY is not set on the server. Photos will upload as-is; the watermark still applies.
+            </p>
+        </div>
+        <p class="text-sm text-gray-500 mb-4">Up to 25 files at once. Each file is uploaded separately so large batches stay under the server limit. Gemini can take up to a minute per photo. New products stay <strong>hidden on the shop</strong> until you mark them available.</p>
         <button type="button" id="startBtn"
             class="bg-blue-600 text-white px-6 py-2.5 rounded font-medium hover:bg-blue-700">Upload selected photos</button>
         <p id="batchStatus" class="mt-3 text-sm font-medium text-blue-700 hidden"></p>
@@ -78,11 +91,30 @@
     const excelImages = document.getElementById("excelImages");
     const excelBtn = document.getElementById("excelBtn");
     const excelStatus = document.getElementById("excelStatus");
+    const enhanceToggle = document.getElementById("enhanceToggle");
+    const watermarkToggle = document.getElementById("watermarkToggle");
+    const enhanceHint = document.getElementById("enhanceHint");
     const catalogueNames = {
         {% for c in catalogues %}
         {{ c.id }}: "{{ c.name | e }}",
         {% endfor %}
     };
+
+    fetch("/api/upload-status", { credentials: "same-origin" })
+        .then(function (res) { return res.json(); })
+        .then(function (status) {
+            if (enhanceHint && status && status.gemini_configured === false) {
+                enhanceHint.classList.remove("hidden");
+            }
+        })
+        .catch(function () { /* ignore */ });
+
+    function uploadQuery() {
+        var parts = [];
+        if (enhanceToggle && enhanceToggle.checked) parts.push("enhance=1");
+        if (watermarkToggle && watermarkToggle.checked) parts.push("watermark=1");
+        return parts.length ? "?" + parts.join("&") : "";
+    }
 
     function showStatus(text) {
         if (!batchStatus) return;
@@ -158,7 +190,7 @@
     async function uploadOne(file, catalogueId) {
         var formData = new FormData();
         formData.append("file", file);
-        var up = await fetch("/api/upload", { method: "POST", body: formData, credentials: "same-origin" });
+        var up = await fetch("/api/upload" + uploadQuery(), { method: "POST", body: formData, credentials: "same-origin" });
         var upBody = await up.json().catch(function () { return {}; });
         if (!up.ok || !upBody.imageUrl) {
             throw new Error(file.name + ": " + errorText(upBody));
@@ -272,7 +304,7 @@
             }
             var formData = new FormData();
             formData.append("file", file);
-            var up = await fetch("/api/upload", { method: "POST", body: formData, credentials: "same-origin" });
+            var up = await fetch("/api/upload" + uploadQuery(), { method: "POST", body: formData, credentials: "same-origin" });
             var upBody = await up.json().catch(function () { return {}; });
             if (!up.ok || !upBody.imageUrl) {
                 throw new Error("Row " + row.row + ": " + errorText(upBody));
