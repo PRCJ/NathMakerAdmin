@@ -6,6 +6,8 @@ import httpx
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg",
     "image/jpg",
+    "image/pjpeg",
+    "image/jfif",
     "image/png",
     "image/webp",
     "image/gif",
@@ -16,6 +18,8 @@ BLOB_API_URL = "https://vercel.com/api/blob"
 _EXT_TYPES = {
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
+    ".jfif": "image/jpeg",
+    ".pjpeg": "image/jpeg",
     ".png": "image/png",
     ".webp": "image/webp",
     ".gif": "image/gif",
@@ -43,7 +47,7 @@ def blob_status():
 
 def normalize_image_type(content_type: str, filename: str) -> str:
     mime = (content_type or "").split(";")[0].strip().lower()
-    if mime == "image/jpg":
+    if mime in {"image/jpg", "image/pjpeg", "image/jfif"}:
         mime = "image/jpeg"
     if mime in ALLOWED_IMAGE_TYPES and mime != "image/jpg":
         return "image/jpeg" if mime == "image/jpeg" else mime

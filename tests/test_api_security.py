@@ -61,6 +61,7 @@ def test_upload_status_reports_blob_unconfigured(client):
     assert body["configured"] is False
     assert body["gemini_configured"] is False
     assert "watermark_logo" in body
+    assert body["photo_pipeline"] == "gemini-default-on"
 
 
 def test_normalize_image_types():
@@ -69,6 +70,8 @@ def test_normalize_image_types():
     assert normalize_image_type("image/jpg", "a.jpg") == "image/jpeg"
     assert normalize_image_type("application/octet-stream", "ring.png") == "image/png"
     assert normalize_image_type("image/png", "x") == "image/png"
+    assert normalize_image_type("image/jfif", "images (12).jfif") == "image/jpeg"
+    assert normalize_image_type("application/octet-stream", "shot.jfif") == "image/jpeg"
 
 
 def test_upload_without_blob_config(auth_client):

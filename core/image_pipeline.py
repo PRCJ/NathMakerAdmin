@@ -28,6 +28,14 @@ def jpeg_under_limit(image_bytes: bytes, max_bytes: int = MAX_IMAGE_BYTES) -> by
     return buf.getvalue()
 
 
+def resolve_photo_flags(enhance, watermark):
+    if enhance is None:
+        enhance = gemini_configured()
+    if watermark is None:
+        watermark = True
+    return bool(enhance), bool(watermark)
+
+
 def prepare_product_photo(data: bytes, mime: str, enhance: bool, watermark: bool):
     notes = []
     enhanced = False
@@ -36,18 +44,11 @@ def prepare_product_photo(data: bytes, mime: str, enhance: bool, watermark: bool
 
     if enhance:
         if not gemini_configured():
-            notes.append("GEMINI_API_KEY is not set; used the original photo.")
-        else:
-            try:
-                data = enhance_jewellery_photo(data, out_mime)
-                out_mime = "image/jpeg"
-                enhanced = True
-                notes.append("Gemini applied a studio catalogue look.")
-            except Exception as exc:
-                notes.append(
-                    "Gemini could not enhance this photo; used the original. "
-                    + str(exc)[:180]
-                )
+            raise RuntimeError("GEMINI_API_KEY is not set in Vercel.")
+        data = enhance_jewellery_photo(data, out_mime)
+        out_mime = "image/jpeg"
+        enhanced = True
+        notes.append("Gemini applied a studio catalogue look.")
 
     if watermark:
         data, review = apply_logo_watermark(data, out_mime)

@@ -21,6 +21,7 @@ def test_upload_status_reports_gemini_and_watermark(client):
     body = client.get("/api/upload-status").json()
     assert body["gemini_configured"] is False
     assert body["watermark_logo"] is True
+    assert body["photo_pipeline"] == "gemini-default-on"
 
 
 def test_enhance_requires_auth(client):
@@ -67,14 +68,24 @@ def test_apply_logo_watermark_reviews_size():
     assert any("balanced" in note for note in review["notes"])
 
 
-def test_prepare_photo_keeps_original_without_gemini_key():
+def test_prepare_photo_requires_gemini_key():
     from core.image_pipeline import prepare_product_photo
 
-    original = _jpeg_bytes()
-    prepared = prepare_product_photo(original, "image/jpeg", enhance=True, watermark=False)
-    assert prepared["enhanced"] is False
-    assert prepared["data"] == original
-    assert any("GEMINI_API_KEY" in note for note in prepared["notes"])
+    try:
+        prepare_product_photo(_jpeg_bytes(), "image/jpeg", enhance=True, watermark=False)
+    except RuntimeError as exc:
+        assert "GEMINI_API_KEY" in str(exc)
+    else:
+        raise AssertionError("expected missing Gemini key to fail")
+
+
+def test_resolve_photo_flags_defaults_off_without_key():
+    from core.image_pipeline import resolve_photo_flags
+
+    enhance, watermark = resolve_photo_flags(None, None)
+    assert enhance is False
+    assert watermark is True
+    assert resolve_photo_flags(False, False) == (False, False)
 
 
 def test_prepare_photo_watermarks_without_gemini():

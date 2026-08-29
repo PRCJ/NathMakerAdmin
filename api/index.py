@@ -22,7 +22,7 @@ from core import models
 from core.database import Base, get_engine, get_db
 from core.excel_import import parse_spreadsheet, build_template_xlsx
 from core.gemini_enhance import gemini_configured
-from core.image_pipeline import prepare_product_photo
+from core.image_pipeline import prepare_product_photo, resolve_photo_flags
 from core.watermark import logo_path
 from core.blob_store import (
     ALLOWED_IMAGE_TYPES,
@@ -308,6 +308,7 @@ def upload_status():
     status = blob_status()
     status["gemini_configured"] = gemini_configured()
     status["watermark_logo"] = bool(logo_path())
+    status["photo_pipeline"] = "gemini-default-on"
     return status
 
 @api_router.post("/images/enhance")
@@ -343,8 +344,8 @@ def enhance_image(body: EnhanceImageRequest, _: None = Depends(require_admin)):
 @api_router.post("/upload")
 def upload_image(
     file: UploadFile = File(...),
-    enhance: bool = Query(False),
-    watermark: bool = Query(False),
+    enhance: Optional[bool] = Query(None),
+    watermark: Optional[bool] = Query(None),
     _: None = Depends(require_admin),
 ):
     if not blob_configured():
@@ -356,13 +357,14 @@ def upload_image(
     if content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(
             status_code=400,
-            detail="Only JPEG, PNG, WebP, and GIF images are allowed.",
+            detail="Only JPEG, PNG, WebP, JFIF, and GIF images are allowed.",
         )
     data = file.file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file.")
     if len(data) > MAX_IMAGE_BYTES:
         raise HTTPException(status_code=400, detail="Image is too large (max 4 MB).")
+    enhance, watermark = resolve_photo_flags(enhance, watermark)
     try:
         prepared = prepare_product_photo(data, content_type, enhance, watermark)
         image_url = upload_image_bytes(
@@ -377,7 +379,7 @@ def upload_image(
             "notes": prepared["notes"],
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=502 if enhance else 500, detail=str(e))
 
 app.include_router(api_router)
 

@@ -17,7 +17,8 @@
         <nav class="flex-1 px-4 py-4 space-y-2">
             <a href="/admin/dashboard" class="block px-4 py-2 rounded {% if request.url.path == '/admin/dashboard' %}bg-blue-500 text-white{% else %}hover:bg-gray-200 text-gray-700{% endif %}">Dashboard</a>
             <a href="/admin/catalogues" class="block px-4 py-2 rounded {% if request.url.path == '/admin/catalogues' %}bg-blue-500 text-white{% else %}hover:bg-gray-200 text-gray-700{% endif %}">Catalogues</a>
-            <a href="/admin/products" class="block px-4 py-2 rounded {% if request.url.path.startswith('/admin/product') %}bg-blue-500 text-white{% else %}hover:bg-gray-200 text-gray-700{% endif %}">Products</a>
+            <a href="/admin/products" class="block px-4 py-2 rounded {% if request.url.path.startswith('/admin/product') and not request.url.path.startswith('/admin/products/bulk') %}bg-blue-500 text-white{% else %}hover:bg-gray-200 text-gray-700{% endif %}">Products</a>
+            <a href="/admin/products/bulk" class="block px-4 py-2 rounded {% if request.url.path.startswith('/admin/products/bulk') %}bg-blue-500 text-white{% else %}hover:bg-gray-200 text-gray-700{% endif %}">Studio upload</a>
             {% if docs_enabled %}
             <a href="/docs" target="_blank" class="block px-4 py-2 rounded hover:bg-gray-200 text-gray-700">Swagger API Docs</a>
             {% endif %}
