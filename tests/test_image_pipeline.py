@@ -9,6 +9,14 @@ def _jpeg_bytes(width=800, height=800, color=(240, 230, 210)):
     return buf.getvalue()
 
 
+def test_logo_is_bundled_next_to_watermark_module():
+    from core.watermark import logo_path
+
+    path = logo_path()
+    assert path
+    assert path.endswith("logo.png")
+
+
 def test_upload_status_reports_gemini_and_watermark(client):
     body = client.get("/api/upload-status").json()
     assert body["gemini_configured"] is False

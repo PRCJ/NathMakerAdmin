@@ -7,8 +7,18 @@ from PIL import Image, ImageDraw
 
 def logo_path() -> Optional[str]:
     here = os.path.dirname(os.path.abspath(__file__))
-    candidate = os.path.abspath(os.path.join(here, "..", "public", "logo.png"))
-    return candidate if os.path.isfile(candidate) else None
+    candidates = (
+        os.path.join(here, "assets", "logo.png"),
+        os.path.join(here, "..", "public", "logo.png"),
+        os.path.join(here, "..", "api", "assets", "logo.png"),
+        os.path.join(os.getcwd(), "public", "logo.png"),
+        os.path.join(os.getcwd(), "core", "assets", "logo.png"),
+    )
+    for candidate in candidates:
+        path = os.path.abspath(candidate)
+        if os.path.isfile(path):
+            return path
+    return None
 
 
 def review_watermark(base: Image.Image, mark: Image.Image) -> dict:

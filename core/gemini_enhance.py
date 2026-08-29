@@ -18,12 +18,20 @@ ENHANCE_PROMPT = (
 )
 
 
+def gemini_api_key() -> str:
+    return (
+        (os.environ.get("GEMINI_API_KEY") or "").strip()
+        or (os.environ.get("GOOGLE_API_KEY") or "").strip()
+        or (os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY") or "").strip()
+    )
+
+
 def gemini_configured() -> bool:
-    return bool((os.environ.get("GEMINI_API_KEY") or "").strip())
+    return bool(gemini_api_key())
 
 
 def enhance_jewellery_photo(image_bytes: bytes, mime_type: str) -> bytes:
-    key = (os.environ.get("GEMINI_API_KEY") or "").strip()
+    key = gemini_api_key()
     if not key:
         raise RuntimeError("GEMINI_API_KEY is not set in Vercel.")
 
