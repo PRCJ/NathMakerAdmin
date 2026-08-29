@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, File, Form, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from core import models
 from core.database import Base, get_engine, get_db
+from core.excel_import import parse_spreadsheet, build_template_xlsx
 from core.blob_store import (
     ALLOWED_IMAGE_TYPES,
     MAX_IMAGE_BYTES,
@@ -422,6 +423,34 @@ def admin_products_bulk(request: Request, db: Session = Depends(get_db)):
         "request": request,
         "catalogues": catalogues
     })
+
+@app.get("/admin/products/bulk/template.xlsx")
+def admin_products_bulk_template(request: Request):
+    enforce_admin(request)
+    return Response(
+        content=build_template_xlsx(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=nathmakers-products.xlsx"},
+    )
+
+@app.post("/api/products/excel-parse")
+def parse_product_excel(
+    file: UploadFile = File(...),
+    _: None = Depends(require_admin),
+):
+    filename = file.filename or "products.xlsx"
+    content = file.file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty spreadsheet.")
+    try:
+        rows = parse_spreadsheet(filename, content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read that spreadsheet. Use .xlsx or .csv.")
+    if not rows:
+        raise HTTPException(status_code=400, detail="No product rows found.")
+    return {"rows": rows}
 
 @app.get("/admin/product/add", response_class=HTMLResponse)
 def admin_product_add_form(request: Request, db: Session = Depends(get_db)):

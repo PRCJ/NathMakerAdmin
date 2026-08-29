@@ -90,6 +90,25 @@ def test_init_db_removed(client):
     assert "tables created" not in response.text
 
 
+def test_excel_parse_requires_auth(client):
+    response = client.post(
+        "/api/products/excel-parse",
+        files={"file": ("p.csv", b"productName,price\nA,1\n", "text/csv")},
+    )
+    assert response.status_code == 401
+
+
+def test_excel_parse_with_auth(auth_client):
+    response = auth_client.post(
+        "/api/products/excel-parse",
+        files={"file": ("p.csv", b"image\nhttps://x.test/a.jpg\n", "text/csv")},
+    )
+    assert response.status_code == 200
+    rows = response.json()["rows"]
+    assert rows[0]["productName"] == "a"
+    assert rows[0]["imageRefs"] == ["https://x.test/a.jpg"]
+
+
 def test_bulk_page_requires_login(client):
     response = client.get("/admin/products/bulk", follow_redirects=False)
     assert response.status_code == 302

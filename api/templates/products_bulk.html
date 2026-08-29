@@ -4,7 +4,7 @@
     <div class="flex items-center justify-between mb-6">
         <div>
             <h2 class="text-2xl font-bold text-gray-800">Upload many products</h2>
-            <p class="text-gray-600 mt-1">Select a folder of jewellery photos. Each image becomes its own product. Then fill name, price, and details from the picture.</p>
+            <p class="text-gray-600 mt-1">Upload photos, or an Excel/CSV of details. You can add pictures later, or put image URLs / filenames in the sheet.</p>
         </div>
         <a href="/admin/products" class="text-gray-600 hover:text-gray-800">← Back to products</a>
     </div>
@@ -37,6 +37,32 @@
         <p id="batchStatus" class="mt-3 text-sm font-medium text-blue-700 hidden"></p>
     </div>
 
+    <div class="bg-white p-6 rounded shadow border border-gray-200 mb-8">
+        <h3 class="text-lg font-bold text-gray-800 mb-2">Option 2 — Excel or CSV</h3>
+        <p class="text-sm text-gray-600 mb-4">
+            Use this when you already have names, prices, and descriptions.
+            Leave <strong>image</strong> blank and add photos later, or put a public image URL, or a filename that matches photos you attach here.
+            If a row has only an image (URL or filename), that image is still imported as a product.
+            <a href="/admin/products/bulk/template.xlsx" class="text-blue-600 underline">Download template</a>
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="block mb-1 text-sm font-medium text-gray-700">Spreadsheet (.xlsx or .csv)</label>
+                <input type="file" id="excelInput" accept=".xlsx,.xlsm,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                    class="w-full border p-2 rounded bg-gray-50">
+            </div>
+            <div>
+                <label class="block mb-1 text-sm font-medium text-gray-700">Matching photos (optional)</label>
+                <input type="file" id="excelImages" accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif" multiple
+                    class="w-full border p-2 rounded bg-gray-50">
+            </div>
+        </div>
+        <p class="text-xs text-gray-500 mb-4">Columns recognised: productName, description, price, material, weight, catalogue, image, available. Image can be a URL or a file name like <code>ring.jpg</code>.</p>
+        <button type="button" id="excelBtn"
+            class="bg-emerald-700 text-white px-6 py-2.5 rounded font-medium hover:bg-emerald-800">Import spreadsheet</button>
+        <p id="excelStatus" class="mt-3 text-sm font-medium text-emerald-800 hidden"></p>
+    </div>
+
     <div id="cards" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
     {% endif %}
 </div>
@@ -48,6 +74,15 @@
     const batchStatus = document.getElementById("batchStatus");
     const cards = document.getElementById("cards");
     const MAX_FILES = 25;
+    const excelInput = document.getElementById("excelInput");
+    const excelImages = document.getElementById("excelImages");
+    const excelBtn = document.getElementById("excelBtn");
+    const excelStatus = document.getElementById("excelStatus");
+    const catalogueNames = {
+        {% for c in catalogues %}
+        {{ c.id }}: "{{ c.name | e }}",
+        {% endfor %}
+    };
 
     function showStatus(text) {
         if (!batchStatus) return;
@@ -178,6 +213,135 @@
             showStatus("Created " + ok + " product(s)." + (failed.length ? " Failed: " + failed.join(" | ") : " Fill in details on each card, then Save."));
             fileInput.value = "";
             startBtn.disabled = false;
+        });
+    }
+
+    function showExcelStatus(text) {
+        if (!excelStatus) return;
+        excelStatus.classList.remove("hidden");
+        excelStatus.innerText = text;
+    }
+
+    function fileKey(name) {
+        return (name || "").split(/[\\/]/).pop().toLowerCase();
+    }
+
+    function buildImageMap(fileList) {
+        var map = {};
+        if (!fileList) return map;
+        for (var i = 0; i < fileList.length; i++) {
+            var file = fileList[i];
+            map[fileKey(file.name)] = file;
+            var noExt = fileKey(file.name).replace(/\.[^.]+$/, "");
+            if (!map[noExt]) map[noExt] = file;
+        }
+        return map;
+    }
+
+    function resolveCatalogueId(row, fallbackId) {
+        var raw = (row.catalogue || "").trim();
+        if (!raw) return fallbackId;
+        if (/^\d+$/.test(raw)) return parseInt(raw, 10);
+        var wanted = raw.toLowerCase();
+        var ids = Object.keys(catalogueNames);
+        for (var i = 0; i < ids.length; i++) {
+            if ((catalogueNames[ids[i]] || "").toLowerCase() === wanted) {
+                return parseInt(ids[i], 10);
+            }
+        }
+        return fallbackId;
+    }
+
+    function isUrl(ref) {
+        var lower = (ref || "").toLowerCase();
+        return lower.indexOf("http://") === 0 || lower.indexOf("https://") === 0;
+    }
+
+    async function resolveRowImages(row, imageMap) {
+        var urls = [];
+        var refs = row.imageRefs || [];
+        for (var i = 0; i < refs.length; i++) {
+            var ref = refs[i];
+            if (isUrl(ref)) {
+                urls.push(ref);
+                continue;
+            }
+            var file = imageMap[fileKey(ref)] || imageMap[fileKey(ref).replace(/\.[^.]+$/, "")];
+            if (!file) {
+                throw new Error("Row " + row.row + ": no matching photo for " + ref);
+            }
+            var formData = new FormData();
+            formData.append("file", file);
+            var up = await fetch("/api/upload", { method: "POST", body: formData, credentials: "same-origin" });
+            var upBody = await up.json().catch(function () { return {}; });
+            if (!up.ok || !upBody.imageUrl) {
+                throw new Error("Row " + row.row + ": " + errorText(upBody));
+            }
+            urls.push(upBody.imageUrl);
+        }
+        return urls;
+    }
+
+    if (excelBtn) {
+        excelBtn.addEventListener("click", async function () {
+            if (!excelInput.files || !excelInput.files.length) {
+                alert("Choose an Excel or CSV file first.");
+                return;
+            }
+            var fallbackId = parseInt(catalogueSelect.value, 10);
+            excelBtn.disabled = true;
+            showExcelStatus("Reading spreadsheet...");
+            var formData = new FormData();
+            formData.append("file", excelInput.files[0]);
+            var parsed = await fetch("/api/products/excel-parse", {
+                method: "POST",
+                body: formData,
+                credentials: "same-origin"
+            });
+            var parsedBody = await parsed.json().catch(function () { return {}; });
+            if (!parsed.ok) {
+                showExcelStatus(errorText(parsedBody));
+                excelBtn.disabled = false;
+                return;
+            }
+            var rows = parsedBody.rows || [];
+            var imageMap = buildImageMap(excelImages && excelImages.files);
+            var ok = 0;
+            var failed = [];
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                showExcelStatus("Importing row " + row.row + " (" + (i + 1) + " of " + rows.length + ")");
+                try {
+                    var imageUrls = await resolveRowImages(row, imageMap);
+                    var created = await fetch("/api/products", {
+                        method: "POST",
+                        credentials: "same-origin",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            catalogueId: resolveCatalogueId(row, fallbackId),
+                            productName: row.productName,
+                            description: row.description || "",
+                            price: row.price || 0,
+                            material: row.material || "",
+                            weight: row.weight || "",
+                            imageUrls: imageUrls,
+                            isAvailable: !!row.isAvailable
+                        })
+                    });
+                    var product = await created.json().catch(function () { return {}; });
+                    if (!created.ok) throw new Error("Row " + row.row + ": " + errorText(product));
+                    addCard(product);
+                    if (row.isAvailable) {
+                        var last = cards.firstElementChild;
+                        if (last && last.querySelector(".js-avail")) last.querySelector(".js-avail").checked = true;
+                    }
+                    ok += 1;
+                } catch (err) {
+                    failed.push(err.message || String(err));
+                }
+            }
+            showExcelStatus("Imported " + ok + " row(s)." + (failed.length ? " Failed: " + failed.join(" | ") : " Review the cards and Save if you need to adjust."));
+            excelBtn.disabled = false;
         });
     }
 </script>
