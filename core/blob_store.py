@@ -1,32 +1,59 @@
 import os
 import time
 
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+import httpx
+
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+}
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
+BLOB_API_URL = "https://vercel.com/api/blob"
+
+_EXT_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
+
+
+def _blob_token() -> str:
+    return (os.environ.get("BLOB_READ_WRITE_TOKEN") or "").strip()
 
 
 def blob_configured() -> bool:
-    return bool(
-        (os.environ.get("BLOB_READ_WRITE_TOKEN") or "").strip()
-        or (os.environ.get("BLOB_STORE_ID") or "").strip()
-    )
+    return bool(_blob_token())
 
 
 def blob_status():
-    token_set = bool((os.environ.get("BLOB_READ_WRITE_TOKEN") or "").strip())
+    token_set = bool(_blob_token())
     store_set = bool((os.environ.get("BLOB_STORE_ID") or "").strip())
     return {
         "storage": "vercel_blob",
-        "configured": token_set or store_set,
+        "configured": token_set,
         "token_set": token_set,
         "store_id_set": store_set,
     }
 
 
-def upload_image_bytes(data: bytes, filename: str, mime_type: str) -> str:
-    from vercel.blob import put
+def normalize_image_type(content_type: str, filename: str) -> str:
+    mime = (content_type or "").split(";")[0].strip().lower()
+    if mime == "image/jpg":
+        mime = "image/jpeg"
+    if mime in ALLOWED_IMAGE_TYPES and mime != "image/jpg":
+        return "image/jpeg" if mime == "image/jpeg" else mime
+    ext = os.path.splitext(filename or "")[1].lower()
+    return _EXT_TYPES.get(ext, mime)
 
-    if not blob_configured():
+
+def upload_image_bytes(data: bytes, filename: str, mime_type: str) -> str:
+    token = _blob_token()
+    if not token:
         raise RuntimeError(
             "Vercel Blob is not configured. Create a public Blob store in the "
             "Vercel project Storage tab so BLOB_READ_WRITE_TOKEN is set."
@@ -34,11 +61,27 @@ def upload_image_bytes(data: bytes, filename: str, mime_type: str) -> str:
 
     safe_name = os.path.basename(filename) or "image.jpg"
     pathname = f"products/{int(time.time())}_{safe_name}"
-    result = put(
-        pathname,
-        data,
-        access="public",
-        content_type=mime_type,
-        add_random_suffix=True,
+    headers = {
+        "authorization": f"Bearer {token}",
+        "x-api-version": "11",
+        "x-content-type": mime_type,
+        "x-vercel-blob-access": "public",
+        "x-add-random-suffix": "1",
+    }
+    response = httpx.put(
+        BLOB_API_URL,
+        params={"pathname": pathname},
+        headers=headers,
+        content=data,
+        timeout=30.0,
     )
-    return result.url
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"Blob upload failed ({response.status_code}): {response.text[:300]}"
+        )
+    payload = response.json()
+    url = payload.get("url")
+    if not url:
+        raise RuntimeError("Blob upload succeeded but no URL was returned.")
+    return url
+

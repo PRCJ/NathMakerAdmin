@@ -23,6 +23,7 @@ from core.blob_store import (
     MAX_IMAGE_BYTES,
     blob_configured,
     blob_status,
+    normalize_image_type,
     upload_image_bytes,
 )
 
@@ -302,7 +303,7 @@ def upload_image(file: UploadFile = File(...), _: None = Depends(require_admin))
             status_code=500,
             detail="Vercel Blob is not configured. Create a public Blob store in the Vercel project Storage tab.",
         )
-    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    content_type = normalize_image_type(file.content_type or "", file.filename or "")
     if content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(
             status_code=400,

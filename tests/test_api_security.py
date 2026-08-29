@@ -61,6 +61,14 @@ def test_upload_status_reports_blob_unconfigured(client):
     assert body["configured"] is False
 
 
+def test_normalize_image_types():
+    from core.blob_store import normalize_image_type
+
+    assert normalize_image_type("image/jpg", "a.jpg") == "image/jpeg"
+    assert normalize_image_type("application/octet-stream", "ring.png") == "image/png"
+    assert normalize_image_type("image/png", "x") == "image/png"
+
+
 def test_upload_without_blob_config(auth_client):
     response = auth_client.post(
         "/api/upload",

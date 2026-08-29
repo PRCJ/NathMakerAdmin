@@ -142,37 +142,49 @@
         renderPreviews();
     }
 
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropzone.addEventListener(eventName, preventDefaults, false);
-    });
-
     function preventDefaults(e) {
         e.preventDefault();
         e.stopPropagation();
     }
 
-    fileInput.addEventListener('change', async (e) => {
-        const files = e.target.files;
-        if (!files.length) return;
+    function errorText(result) {
+        if (!result) return "Upload failed.";
+        if (typeof result.detail === "string") return result.detail;
+        if (Array.isArray(result.detail)) {
+            return result.detail.map(function (item) {
+                return item.msg || JSON.stringify(item);
+            }).join(" ");
+        }
+        return JSON.stringify(result);
+    }
 
-        uploadStatus.classList.remove('hidden');
-        uploadStatus.innerText = `Uploading ${files.length} file(s)...`;
+    async function uploadFiles(files) {
+        if (!files || !files.length) return;
 
-        for (let i = 0; i < files.length; i++) {
-            const formData = new FormData();
-            formData.append('file', files[i]);
+        uploadStatus.classList.remove("hidden");
+        uploadStatus.innerText = "Uploading " + files.length + " file(s)...";
+
+        for (var i = 0; i < files.length; i++) {
+            var formData = new FormData();
+            formData.append("file", files[i]);
 
             try {
-                const response = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
+                var response = await fetch("/api/upload", {
+                    method: "POST",
+                    body: formData,
+                    credentials: "same-origin"
                 });
-                const result = await response.json();
-                if (result.imageUrl) {
+                var result = {};
+                try {
+                    result = await response.json();
+                } catch (parseErr) {
+                    result = { detail: "Upload failed with status " + response.status };
+                }
+                if (response.ok && result.imageUrl) {
                     currentImages.push(result.imageUrl);
                     renderPreviews();
-                } else if (result.detail) {
-                    alert('Upload error: ' + result.detail);
+                } else {
+                    alert("Upload error: " + errorText(result));
                 }
             } catch (err) {
                 console.error("Upload error:", err);
@@ -180,8 +192,19 @@
             }
         }
 
-        uploadStatus.classList.add('hidden');
-        fileInput.value = ""; // reset
+        uploadStatus.classList.add("hidden");
+        fileInput.value = "";
+    }
+
+    ["dragenter", "dragover", "dragleave"].forEach(function (eventName) {
+        dropzone.addEventListener(eventName, preventDefaults, false);
+    });
+    dropzone.addEventListener("drop", function (e) {
+        preventDefaults(e);
+        uploadFiles(e.dataTransfer && e.dataTransfer.files);
+    });
+    fileInput.addEventListener("change", function (e) {
+        uploadFiles(e.target.files);
     });
 
     renderPreviews();
