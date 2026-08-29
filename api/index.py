@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import hashlib
+import time
 from datetime import datetime
 from typing import Optional, List
 
@@ -12,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import cloudinary
@@ -22,25 +24,65 @@ from core.database import Base, get_engine, get_db
 
 from contextlib import asynccontextmanager
 
+_ENABLE_DOCS = os.environ.get("ENABLE_DOCS") == "1"
+_IS_PRODUCTION = os.environ.get("VERCEL_ENV") == "production"
+
+LOGIN_WINDOW_SECONDS = 15 * 60
+LOGIN_MAX_FAILURES = 5
+_login_failures = {}
+
+
+def _admin_password() -> str:
+    pw = (os.environ.get("ADMIN_PASSWORD") or "").strip()
+    if not pw:
+        raise RuntimeError("ADMIN_PASSWORD is required")
+    return pw
+
+
+def _admin_cookie_value() -> str:
+    return hashlib.sha256(_admin_password().encode()).hexdigest()
+
+
+def _cookie_secure() -> bool:
+    return _IS_PRODUCTION
+
+
+def _cors_origins():
+    origins = [
+        "https://nathmakers.com",
+        "https://www.nathmakers.com",
+        "https://nath-maker-admin-sigma.vercel.app",
+    ]
+    extra = os.environ.get("FRONTEND_URL")
+    if extra and extra not in origins:
+        origins.append(extra)
+    if not _IS_PRODUCTION:
+        origins.append("http://localhost:8081")
+        if os.environ.get("ALLOW_ALL_ORIGINS"):
+            return ["*"]
+    return origins
+
+
 @asynccontextmanager
 async def lifespan(app):
+    _admin_password()
     try:
         Base.metadata.create_all(bind=get_engine())
     except Exception:
         pass
     yield
 
-app = FastAPI(title="NathMaker API", lifespan=lifespan)
-
-frontend_url = os.environ.get("FRONTEND_URL", "https://nath-maker-admin-sigma.vercel.app")
-
-allowed_origins = [frontend_url, "http://localhost:8081"]
-if os.environ.get("ALLOW_ALL_ORIGINS"):
-    allowed_origins = ["*"]
+app = FastAPI(
+    title="NathMaker API",
+    lifespan=lifespan,
+    docs_url="/docs" if _ENABLE_DOCS else None,
+    redoc_url="/redoc" if _ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if _ENABLE_DOCS else None,
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -48,6 +90,7 @@ app.add_middleware(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+templates.env.globals["docs_enabled"] = _ENABLE_DOCS
 
 cloudinary.config(
     cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME', 'demo'),
@@ -66,6 +109,36 @@ def _parse_image_urls(product):
             product.imageUrls = []
     elif product.imageUrls is None:
         product.imageUrls = []
+
+
+def require_admin(request: Request) -> None:
+    if request.cookies.get("admin_token") != _admin_cookie_value():
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def enforce_admin(request: Request):
+    if request.cookies.get("admin_token") != _admin_cookie_value():
+        raise HTTPException(status_code=302, headers={"Location": "/admin/login"})
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _login_allowed(ip: str) -> bool:
+    now = time.time()
+    recent = [t for t in _login_failures.get(ip, []) if now - t < LOGIN_WINDOW_SECONDS]
+    _login_failures[ip] = recent
+    return len(recent) < LOGIN_MAX_FAILURES
+
+
+def _record_login_failure(ip: str) -> None:
+    _login_failures.setdefault(ip, []).append(time.time())
 
 
 # ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -110,13 +183,27 @@ def ensure_tables():
         except Exception:
             pass
 
+@api_router.get("/health")
+def health():
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ok"}
+    except Exception:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
 @api_router.get("/catalogues", response_model=List[CatalogueSchema])
 def get_all_catalogues(db: Session = Depends(get_db)):
     ensure_tables()
     return db.query(models.Catalogue).all()
 
 @api_router.post("/catalogues", response_model=CatalogueSchema, status_code=201)
-def create_catalogue(cat: CatalogueCreate, db: Session = Depends(get_db)):
+def create_catalogue(
+    cat: CatalogueCreate,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+):
     db_cat = models.Catalogue(
         name=cat.name,
         description=cat.description,
@@ -147,7 +234,11 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
     return product
 
 @api_router.post("/products", response_model=ProductSchema, status_code=201)
-def create_product(prod: ProductCreate, db: Session = Depends(get_db)):
+def create_product(
+    prod: ProductCreate,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+):
     db_prod = models.Product(
         catalogueId=prod.catalogueId,
         productName=prod.productName,
@@ -165,7 +256,12 @@ def create_product(prod: ProductCreate, db: Session = Depends(get_db)):
     return db_prod
 
 @api_router.put("/products/{product_id}", response_model=ProductSchema)
-def update_product(product_id: int, updated: ProductCreate, db: Session = Depends(get_db)):
+def update_product(
+    product_id: int,
+    updated: ProductCreate,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -185,7 +281,11 @@ def update_product(product_id: int, updated: ProductCreate, db: Session = Depend
     return product
 
 @api_router.delete("/products/{product_id}")
-def delete_product(product_id: int, db: Session = Depends(get_db)):
+def delete_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -204,7 +304,7 @@ def upload_status():
     }
 
 @api_router.post("/upload")
-def upload_image(file: UploadFile = File(...)):
+def upload_image(file: UploadFile = File(...), _: None = Depends(require_admin)):
     cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', 'demo')
     if cloud_name == 'demo' or not cloud_name:
         raise HTTPException(status_code=500, detail="Cloudinary not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET in Vercel environment variables.")
@@ -218,38 +318,6 @@ app.include_router(api_router)
 
 # ─── Admin Endpoints ──────────────────────────────────────────────────────────
 
-ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "admin123")
-_admin_token = hashlib.sha256(ADMIN_PASS.encode()).hexdigest()
-
-def enforce_admin(request: Request):
-    if request.cookies.get("admin_token") != _admin_token:
-        raise HTTPException(status_code=302, headers={"Location": "/admin/login"})
-
-@app.get("/admin/init-db")
-def init_db():
-    try:
-        Base.metadata.create_all(bind=get_engine())
-        return {"message": "Database tables created successfully"}
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.get("/admin/reset-db")
-def reset_db():
-    """Drop and recreate all tables. WARNING: Deletes all data!"""
-    try:
-        engine = get_engine()
-        with engine.connect() as conn:
-            conn.execute(__import__("sqlalchemy").text("DROP TABLE IF EXISTS product CASCADE"))
-            conn.execute(__import__("sqlalchemy").text("DROP TABLE IF EXISTS catalogue CASCADE"))
-            conn.execute(__import__("sqlalchemy").text("DROP TABLE IF EXISTS item CASCADE"))
-            conn.execute(__import__("sqlalchemy").text("DROP TABLE IF EXISTS admins CASCADE"))
-            conn.commit()
-        Base.metadata.create_all(bind=engine)
-        return {"message": "Database reset: all tables dropped and recreated"}
-    except Exception as e:
-        import traceback
-        return {"error": str(e), "traceback": traceback.format_exc()}
-
 @app.get("/admin", response_class=RedirectResponse)
 def admin_redirect():
     return RedirectResponse(url="/admin/dashboard")
@@ -260,16 +328,32 @@ def login_page(request: Request):
 
 @app.post("/admin/login")
 def login_submit(request: Request, password: str = Form(...)):
-    if password == ADMIN_PASS:
+    ip = _client_ip(request)
+    if not _login_allowed(ip):
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Too many attempts. Try again later."},
+            status_code=429,
+        )
+    if password == _admin_password():
+        _login_failures.pop(ip, None)
         response = RedirectResponse(url="/admin/dashboard", status_code=302)
-        response.set_cookie(key="admin_token", value=_admin_token, httponly=True, samesite="lax")
+        response.set_cookie(
+            key="admin_token",
+            value=_admin_cookie_value(),
+            httponly=True,
+            secure=_cookie_secure(),
+            samesite="lax",
+            path="/",
+        )
         return response
+    _record_login_failure(ip)
     return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid password"})
 
 @app.get("/admin/logout")
 def logout():
     response = RedirectResponse(url="/admin/login", status_code=302)
-    response.delete_cookie("admin_token")
+    response.delete_cookie("admin_token", path="/")
     return response
 
 @app.get("/admin/dashboard", response_class=HTMLResponse)
@@ -402,7 +486,7 @@ def admin_product_delete(request: Request, id: int, db: Session = Depends(get_db
 
 PUBLIC_DIR = os.path.join(BASE_DIR, "..", "public")
 
-if os.path.isdir(PUBLIC_DIR):
+if os.path.isdir(PUBLIC_DIR) and not os.environ.get("TESTING"):
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
 

@@ -18,7 +18,18 @@ def get_engine():
 
     raw = os.environ.get("DATABASE_URL", "")
 
-    if raw and not raw.startswith("sqlite"):
+    if raw.startswith("sqlite"):
+        _is_sqlite = True
+        url = "sqlite:///:memory:" if raw in ("sqlite://", "sqlite:///:memory:") else raw
+        _engine = create_engine(
+            url,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        _attach_sqlite_pragma(_engine)
+        return _engine
+
+    if raw:
         p = urlparse(raw)
         user = quote_plus(p.username or "")
         pwd = quote_plus(p.password or "")
@@ -33,27 +44,30 @@ def get_engine():
             connect_args={"sslmode": "require"},
             poolclass=NullPool,
         )
-    else:
-        _is_sqlite = True
-        # /tmp is writable on Vercel serverless; fall back to project root locally
-        tmp = "/tmp" if os.path.isdir("/tmp") else os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), ".."
-        )
-        db_path = os.path.join(tmp, "local.db")
-        url = f"sqlite:///{os.path.abspath(db_path)}"
-        _engine = create_engine(
-            url,
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
-        )
+        return _engine
 
-        @event.listens_for(_engine, "connect")
-        def _set_sqlite_pragma(dbapi_conn, connection_record):
-            cursor = dbapi_conn.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
-
+    _is_sqlite = True
+    # /tmp is writable on Vercel serverless; fall back to project root locally
+    tmp = "/tmp" if os.path.isdir("/tmp") else os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), ".."
+    )
+    db_path = os.path.join(tmp, "local.db")
+    url = f"sqlite:///{os.path.abspath(db_path)}"
+    _engine = create_engine(
+        url,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    _attach_sqlite_pragma(_engine)
     return _engine
+
+
+def _attach_sqlite_pragma(engine):
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 def get_db():
